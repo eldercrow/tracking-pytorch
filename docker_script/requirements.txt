@@ -1,0 +1,14 @@
+opencv-python
+yacs
+tqdm
+PyYAML
+matplotlib
+colorama
+cython
+tensorboardX
+ipython
+ipdb
+jupyterlab
+easydict
+got10k
+h5py
