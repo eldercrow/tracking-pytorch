@@ -55,7 +55,7 @@ __C.TRAIN.WEIGHT_DECAY = 0.0001
 __C.TRAIN.CLS_WEIGHT = 1.0
 __C.TRAIN.LOC_WEIGHT = 1.2
 
-__C.TRAIN.PRINT_FREQ = 20
+__C.TRAIN.PRINT_FREQ = 100
 __C.TRAIN.LOG_GRADS = False
 __C.TRAIN.GRAD_CLIP = 10.0
 
@@ -178,15 +178,12 @@ __C.DATASET.VIDEOS_PER_EPOCH = 600000
 __C.BACKBONE = CN()
 
 # Backbone type, current only support resnet18,34,50;alexnet;mobilenet
-__C.BACKBONE.TYPE = 'res50'
+__C.BACKBONE.TYPE = 'resnet18'
 
 __C.BACKBONE.KWARGS = CN(new_allowed=True)
 
 # Pretrained backbone weights
 __C.BACKBONE.PRETRAINED = ''
-
-# Train layers
-__C.BACKBONE.TRAIN_LAYERS = ['layer2', 'layer3', 'layer4']
 
 # Layer LR
 __C.BACKBONE.LAYERS_LR = 0.1

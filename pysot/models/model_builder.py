@@ -37,14 +37,13 @@ class ModelBuilder(nn.Module):
             zf = self.neck(zf)
         self.zf = zf
 
-    def track(self, x, xf_crops=None):
+    def track(self, x):
         xf = self.backbone(x)
         xf = self.neck(xf)
-        cls, loc, _ = self.rpn_head(self.zf, xf, xf_crops=xf_crops)
+        cls, loc = self.rpn_head(self.zf, xf)
         return {
                 'cls': cls,
                 'loc': loc,
-                'xf': xf
                }
 
     # def track_ls(self, x, ft1=None):
@@ -78,7 +77,6 @@ class ModelBuilder(nn.Module):
         label_cls = data['label_cls'].cuda()
         label_loc = data['label_loc'].cuda()
         label_loc_weight = data['label_loc_weight'].cuda()
-        x_pos = data['x_pos'].cuda()
 
         # get feature
         zf = self.backbone(template)
@@ -86,9 +84,8 @@ class ModelBuilder(nn.Module):
         # neck
         zf = self.neck(zf)
         xf = self.neck(xf)
-        x_crops = [None for _ in xf] if isinstance(xf, (list, tuple)) else None
         # head
-        cls, loc, _ = self.rpn_head(zf, xf, x_crops, x_pos)
+        cls, loc = self.rpn_head(zf, xf)
 
         # get loss
         cls = self.log_softmax(cls)

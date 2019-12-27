@@ -81,5 +81,5 @@ class Anchors:
         x1, y1, x2, y2 = center2corner([cx, cy, w, h])
 
         self.all_anchors = (np.stack([x1, y1, x2, y2]).astype(np.float32),
-                            np.stack([cx, cy, w,  h]).astype(np.float32))
+                            np.stack([cx, cy, w, h]).astype(np.float32))
         return True

@@ -169,13 +169,13 @@ class TrainingDataPreprocessor:
         # search_box = self._get_bbox(search_image, search[1])
 
         # anchor target setting - here or in the network?
-        cls, delta, delta_weight, overlap, x_pos = self.anchor_target(
+        cls, delta, delta_weight, overlap = self.anchor_target(
                 search_box, cfg.TRAIN.OUTPUT_SIZE, is_neg)
 
         # finally, augment x_pos
-        rx, ry = np.random.randint(-2, 3, 2)
-        x_pos[0::2] += rx
-        x_pos[1::2] += ry
+        # rx, ry = np.random.randint(-2, 3, 2)
+        # x_pos[0::2] += rx
+        # x_pos[1::2] += ry
 
         ret = { \
                 'template': np.transpose(template_image, (2, 0, 1)).astype(np.float32),
@@ -184,7 +184,6 @@ class TrainingDataPreprocessor:
                 'label_loc': delta,
                 'label_loc_weight': delta_weight,
                 'bbox': search_box,
-                'x_pos': x_pos,
                 }
                 # 'template_box': template_box
         return ret

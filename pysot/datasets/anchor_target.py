@@ -18,7 +18,7 @@ class AnchorTarget:
                                cfg.ANCHOR.RATIOS,
                                cfg.ANCHOR.SCALES)
 
-        self.anchors.generate_all_anchors(im_c=cfg.TRAIN.SEARCH_SIZE//2,
+        self.anchors.generate_all_anchors(im_c=cfg.TRAIN.SEARCH_SIZE / 2.0,
                                           size=cfg.TRAIN.OUTPUT_SIZE)
 
     def __call__(self, target, size, neg=False):
@@ -45,12 +45,10 @@ class AnchorTarget:
             # r = size // 2 + 3 + 1
             # cls[:, l:r, l:r] = 0
 
-            cx = size // 2
-            cy = size // 2
-            cx += int(np.ceil((tcx - cfg.TRAIN.SEARCH_SIZE // 2) /
-                      cfg.ANCHOR.STRIDE + 0.5))
-            cy += int(np.ceil((tcy - cfg.TRAIN.SEARCH_SIZE // 2) /
-                      cfg.ANCHOR.STRIDE + 0.5))
+            cx = size / 2.0
+            cy = size / 2.0
+            cx = int(np.around(cx + (tcx - cfg.TRAIN.SEARCH_SIZE / 2.0) / cfg.ANCHOR.STRIDE))
+            cy = int(np.around(cy + (tcy - cfg.TRAIN.SEARCH_SIZE / 2.0) / cfg.ANCHOR.STRIDE))
             l = max(0, cx - 3)
             r = min(size, cx + 4)
             u = max(0, cy - 3)
@@ -62,9 +60,7 @@ class AnchorTarget:
             cls[neg] = 0
 
             overlap = np.zeros((anchor_num, size, size), dtype=np.float32)
-            # att_mask = np.zeros((1, 25, 25), dtype=np.float32)
-            x_pos = np.reshape(np.array([cx-3, cy-3, cx+4, cy+4]).astype(np.float32), (1, 4))
-            return cls, delta, delta_weight, overlap, x_pos
+            return cls, delta, delta_weight, overlap
 
         anchor_box = self.anchors.all_anchors[0]
         anchor_center = self.anchors.all_anchors[1]
@@ -84,10 +80,10 @@ class AnchorTarget:
             np.logical_or(overlap > cfg.TRAIN.THR_HIGH, overlap == np.max(overlap)) \
             )
         neg = np.where(overlap < cfg.TRAIN.THR_LOW)
-        att_mask = np.zeros_like(overlap) #np.max(overlap, axis=0) < cfg.TRAIN.THR_LOW
+        # att_mask = np.zeros_like(overlap) #np.max(overlap, axis=0) < cfg.TRAIN.THR_LOW
 
-        _, iy, ix = np.unravel_index(np.argmax(overlap), [int(anchor_num), size, size])
-        x_pos = np.reshape(np.array([ix-2, iy-2, ix+3, iy+3]).astype(np.float32), (1, 4))
+        # _, iy, ix = np.unravel_index(np.argmax(overlap), [int(anchor_num), size, size])
+        # x_pos = np.reshape(np.array([ix-2, iy-2, ix+3, iy+3]).astype(np.float32), (1, 4))
 
         pos, pos_num = select(pos, cfg.TRAIN.POS_NUM)
         neg, neg_num = select(neg, cfg.TRAIN.TOTAL_NUM - cfg.TRAIN.POS_NUM)
@@ -96,4 +92,4 @@ class AnchorTarget:
         delta_weight[pos] = 1. / (pos_num + 1e-6)
 
         cls[neg] = 0
-        return cls, delta, delta_weight, overlap, x_pos
+        return cls, delta, delta_weight, overlap
