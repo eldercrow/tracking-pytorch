@@ -5,14 +5,18 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from torchvision.ops import RoIAlign
 
 from pysot.config import cfg
 from pysot.models.loss import select_cross_entropy_loss, weight_l1_loss
 from pysot.models.backbone import get_backbone
 from pysot.models.head import get_rpn_head
 from pysot.models.neck import get_neck
+from pysot.models.non_local import get_nonlocal
 
 
 class ModelBuilder(nn.Module):
@@ -27,6 +31,13 @@ class ModelBuilder(nn.Module):
         self.neck = get_neck(cfg.ADJUST.TYPE,
                              **cfg.ADJUST.KWARGS)
 
+        # build non-local layer
+        # self.non_local = get_nonlocal(cfg.NONLOCAL.TYPE,
+        #                               **cfg.NONLOCAL.KWARGS)
+
+        # roi align for cropping center
+        self.roi_align = RoIAlign((7, 7), 1.0 / cfg.ANCHOR.STRIDE, 1)
+
         # build rpn head
         self.rpn_head = get_rpn_head(cfg.RPN.TYPE,
                                      **cfg.RPN.KWARGS)
@@ -35,11 +46,13 @@ class ModelBuilder(nn.Module):
         zf = self.backbone(z)
         if cfg.ADJUST.ADJUST:
             zf = self.neck(zf)
+        zf = self.non_local(zf)
         self.zf = zf
 
     def track(self, x):
         xf = self.backbone(x)
         xf = self.neck(xf)
+        xf = self.non_local(xf)
         cls, loc = self.rpn_head(self.zf, xf)
         return {
                 'cls': cls,
@@ -74,9 +87,16 @@ class ModelBuilder(nn.Module):
         """
         template = data['template'].cuda()
         search = data['search'].cuda()
-        label_cls = data['label_cls'].cuda()
-        label_loc = data['label_loc'].cuda()
-        label_loc_weight = data['label_loc_weight'].cuda()
+        template_box = data['template_box'].cuda()
+        search_box = data['search_box'].cuda()
+        # 12: from template to search
+        label_cls12 = data['label_cls12'].cuda()
+        label_loc12 = data['label_loc12'].cuda()
+        label_loc_weight12 = data['label_loc_weight12'].cuda()
+        # 21: from search to template
+        label_cls21 = data['label_cls21'].cuda()
+        label_loc21 = data['label_loc21'].cuda()
+        label_loc_weight21 = data['label_loc_weight21'].cuda()
 
         # get feature
         zf = self.backbone(template)
@@ -84,13 +104,35 @@ class ModelBuilder(nn.Module):
         # neck
         zf = self.neck(zf)
         xf = self.neck(xf)
+        # non-local
+        # zf = self.non_local(zf)
+        # xf = self.non_local(xf)
+
+        # crop
+        template_box = torch.split(template_box, 1, dim=0)
+        search_box = torch.split(search_box, 1, dim=0)
+
+        if isinstance(zf, (list, tuple)):
+            zf_crop = [self.roi_align(zi, template_box) for zi in zf]
+            xf_crop = [self.roi_align(xi, search_box) for xi in xf]
+        else:
+            zf_crop = self.roi_align(zf, template_box)
+            xf_crop = self.roi_align(xf, search_box)
         # head
-        cls, loc = self.rpn_head(zf, xf)
+        cls12, loc12 = self.rpn_head(zf_crop, xf)
+        cls21, loc21 = self.rpn_head(xf_crop, zf)
 
         # get loss
-        cls = self.log_softmax(cls)
-        cls_loss = select_cross_entropy_loss(cls, label_cls)
-        loc_loss = weight_l1_loss(loc, label_loc, label_loc_weight)
+        cls12 = self.log_softmax(cls12)
+        cls_loss12 = select_cross_entropy_loss(cls12, label_cls12)
+        loc_loss12 = weight_l1_loss(loc12, label_loc12, label_loc_weight12)
+
+        cls21 = self.log_softmax(cls21)
+        cls_loss21 = select_cross_entropy_loss(cls21, label_cls21)
+        loc_loss21 = weight_l1_loss(loc21, label_loc21, label_loc_weight21)
+
+        cls_loss = 0.5 * (cls_loss12 + cls_loss21)
+        loc_loss = 0.5 * (loc_loss12 + loc_loss21)
 
         outputs = {}
         outputs['total_loss'] = cfg.TRAIN.CLS_WEIGHT * cls_loss + \

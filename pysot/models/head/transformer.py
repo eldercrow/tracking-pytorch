@@ -20,9 +20,9 @@ class Transformer(nn.Module):
         '''
         super(Transformer, self).__init__()
         
-        self.conv_in = self._conv_bn_relu(ich, hiddens[0], 1)
+        self.conv_in = self._conv_bn_relu(ich, ich, kernel_size=3)
         self.hiddens = nn.ModuleList(
-            [self._conv_bn_relu(h0, h1, 1) for (h0, h1) in zip(hiddens[:-1], hiddens[1:])]
+            [self._conv_bn_relu(h0, h1, 1) for (h0, h1) in zip([ich] + hiddens[:-1], hiddens)]
         )
         self.pool = nn.AdaptiveMaxPool2d(1)
         self.conv_out = nn.Conv2d(hiddens[-1], och, kernel_size=1, bias=True)
@@ -30,7 +30,7 @@ class Transformer(nn.Module):
 
     def _conv_bn_relu(self, ich, och, kernel_size, inplace=True):
         return nn.Sequential(
-            nn.Conv2d(ich, och, kernel_size=kernel_size, bias=False),
+            nn.Conv2d(ich, och, kernel_size=kernel_size, padding=kernel_size//2, bias=False),
             nn.BatchNorm2d(och),
             nn.ReLU(inplace=inplace)
         )
@@ -40,6 +40,8 @@ class Transformer(nn.Module):
         '''
         Nb, ch, hh, ww = x.shape
         och = hh*ww
+        x = self.conv_in(x)
+        y = self.conv_in(y)
         # swap channel and spatial
         x = x.permute(0, 2, 3, 1).reshape(Nb, hh*ww, 1, ch)
         y = y.permute(0, 2, 3, 1).reshape(Nb, hh*ww, 1, ch)

@@ -5,12 +5,14 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from pysot.models.head.rpn import UPChannelRPN, DepthwiseRPN, MultiRPN
+from pysot.models.head.rpn import UPChannelRPN, DepthwiseRPN, MultiRPN, MaxPoolRPN, MultiMaxPoolRPN
 
 RPNS = {
         'UPChannelRPN': UPChannelRPN,
         'DepthwiseRPN': DepthwiseRPN,
-        'MultiRPN': MultiRPN
+        'MultiRPN': MultiRPN,
+        'MultiMaxPoolRPN': MultiMaxPoolRPN,
+        'MaxPoolRPN': MaxPoolRPN,
        }
 
 

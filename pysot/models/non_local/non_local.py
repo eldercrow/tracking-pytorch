@@ -36,6 +36,16 @@ class PSPModule(nn.Module):
         self.pool = nn.MaxPool2d(3, 2, padding=0)
         self.pool_iter = pool_iter
 
+        if not isinstance(in_hw, (list, tuple)):
+            in_hw = (in_hw, in_hw)
+
+        # hh, ww = in_hw
+        # for i in range(pool_iter):
+        #     hh //= 2
+        #     ww //= 2
+        #     self.add_module('pool{:d}'.format(i),
+        #         nn.AdaptiveMaxPool2d((hh, ww)))
+
         # weight map
         hh, ww = in_hw
         X0, Y0 = self._create_grid(hh, ww)
@@ -55,9 +65,9 @@ class PSPModule(nn.Module):
         dy = np.reshape(Y0, (-1, 1)) - np.reshape(Yp, (1, -1))
         d2 = np.expand_dims(dx*dx + dy*dy, 0)
 
-        self.P0 = torch.tensor(np.expand_dims(np.stack([X0, Y0], axis=1), 0))
-        self.Pp = torch.tensor(np.expand_dims(np.stack([Xp, Yp], axis=1), 0))
-        self.logW = torch.tensor(-0.5 * d2 / sigma / sigma)
+        self.P0 = torch.tensor(np.expand_dims(np.stack([X0, Y0], axis=1), 0)).cuda()
+        self.Pp = torch.tensor(np.expand_dims(np.stack([Xp, Yp], axis=1), 0)).cuda()
+        self.logW = torch.tensor(-0.5 * d2 / sigma / sigma).cuda()
 
     def _create_grid(self, hh, ww):
         X, Y = np.meshgrid(np.arange(ww), np.arange(hh))
@@ -69,7 +79,8 @@ class PSPModule(nn.Module):
         n, c, _, _ = feats.size()
         priors = []
         prior = feats
-        for _ in range(self.pool_iter):
+        for i in range(self.pool_iter):
+            # pool = getattr(self, 'pool{:d}'.format(i))
             prior = self.pool(prior)
             priors.append(prior)
         priors = [p.view(n, c, -1) for p in priors]
@@ -132,7 +143,9 @@ class _SelfAttentionBlock(nn.Module):
         key = self.psp(key)  # .view(batch_size, self.key_channels, -1)
         sim_map = torch.matmul(query, key)
         sim_map = (self.key_channels ** -.5) * sim_map
-        sim_map = F.softmax(sim_map + self.psp.logW, dim=-1)
+        # spatial weighting
+        sim_map += self.psp.logW
+        sim_map = F.softmax(sim_map, dim=-1)
 
         context = torch.matmul(sim_map, value)
         context = context.permute(0, 2, 1).contiguous()
@@ -172,7 +185,7 @@ class APNB(nn.Module):
             nn.Conv2d(2 * in_channels + 2, out_channels, kernel_size=1, padding=0),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
-            nn.Dropout2d(dropout)
+            # nn.Dropout2d(dropout)
         )
 
     def _make_stage(self, in_channels, output_channels, key_channels, value_channels, in_hw, pool_iter):
@@ -187,3 +200,21 @@ class APNB(nn.Module):
         context = self.stage(feats)
         output = self.conv_bn_dropout(torch.cat([context, feats], 1))
         return output
+
+
+class MultiAPNB(nn.Module):
+    '''
+    '''
+    def __init__(self, in_channels, out_channels, key_channels, value_channels, in_hw, pool_iter=2, dropout=0.05):
+        super(MultiAPNB, self).__init__()
+        for i in range(len(in_channels)):
+            self.add_module('apnb{:d}'.format(i),
+                APNB(in_channels[i], out_channels[i], key_channels[i], value_channels[i], in_hw, pool_iter, dropout))
+
+    def forward(self, feats):
+        outputs = []
+        for ii, feat in enumerate(feats):
+            apnb = getattr(self, 'apnb{:d}'.format(ii))
+            output = apnb(feat)
+            outputs.append(output)
+        return outputs

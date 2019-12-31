@@ -45,8 +45,11 @@ class AnchorTarget:
             # r = size // 2 + 3 + 1
             # cls[:, l:r, l:r] = 0
 
-            cx = size / 2.0
-            cy = size / 2.0
+            # import ipdb
+            # ipdb.set_trace()
+
+            cx = size // 2
+            cy = size // 2
             cx = int(np.around(cx + (tcx - cfg.TRAIN.SEARCH_SIZE / 2.0) / cfg.ANCHOR.STRIDE))
             cy = int(np.around(cy + (tcy - cfg.TRAIN.SEARCH_SIZE / 2.0) / cfg.ANCHOR.STRIDE))
             l = max(0, cx - 3)
@@ -79,7 +82,9 @@ class AnchorTarget:
         pos = np.where( \
             np.logical_or(overlap > cfg.TRAIN.THR_HIGH, overlap == np.max(overlap)) \
             )
-        neg = np.where(overlap < cfg.TRAIN.THR_LOW)
+        neg = np.where( \
+            np.logical_and(overlap < cfg.TRAIN.THR_LOW, overlap < np.max(overlap)) \
+            )
         # att_mask = np.zeros_like(overlap) #np.max(overlap, axis=0) < cfg.TRAIN.THR_LOW
 
         # _, iy, ix = np.unravel_index(np.argmax(overlap), [int(anchor_num), size, size])

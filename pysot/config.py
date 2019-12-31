@@ -33,7 +33,7 @@ __C.TRAIN.POS_NUM = 16
 # Number of anchors per images
 __C.TRAIN.TOTAL_NUM = 64
 
-__C.TRAIN.EXEMPLAR_SIZE = 127
+__C.TRAIN.EXEMPLAR_SIZE = 255 #127
 __C.TRAIN.SEARCH_SIZE = 255
 __C.TRAIN.BASE_SIZE = 8
 __C.TRAIN.OUTPUT_SIZE = 25
@@ -46,7 +46,7 @@ __C.TRAIN.SNAPSHOT_DIR = './snapshot'
 __C.TRAIN.EPOCH = 20
 __C.TRAIN.START_EPOCH = 0
 
-__C.TRAIN.BATCH_SIZE = 32
+__C.TRAIN.BATCH_SIZE = 16
 __C.TRAIN.NUM_WORKERS = 1
 
 __C.TRAIN.MOMENTUM = 0.9
@@ -82,7 +82,7 @@ __C.DATASET = CN(new_allowed=True)
 # Augmentation
 __C.DATASET.TEMPLATE = CN()
 __C.DATASET.TEMPLATE.PAD_RATIO = 2
-__C.DATASET.TEMPLATE.SHIFT = 4.0 / 64.0 #4
+__C.DATASET.TEMPLATE.SHIFT = 1.0 #4.0 / 64.0 #4
 __C.DATASET.TEMPLATE.SCALE = 1.1111
 __C.DATASET.TEMPLATE.ASPECT = 1.1
 __C.DATASET.TEMPLATE.BLUR = 0.0
@@ -203,6 +203,14 @@ __C.ADJUST.KWARGS = CN(new_allowed=True)
 
 # Adjust layer type
 __C.ADJUST.TYPE = "AdjustAllLayer"
+
+# ------------------------------------------------------------------------ #
+# Non-local layer options
+# ------------------------------------------------------------------------ #
+__C.NONLOCAL = CN()
+
+__C.NONLOCAL.TYPE = 'MultiNonLocal'
+__C.NONLOCAL.KWARGS = CN(new_allowed=True)
 
 # ------------------------------------------------------------------------ #
 # RPN options
