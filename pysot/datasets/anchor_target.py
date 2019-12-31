@@ -21,7 +21,7 @@ class AnchorTarget:
         self.anchors.generate_all_anchors(im_c=cfg.TRAIN.SEARCH_SIZE / 2.0,
                                           size=cfg.TRAIN.OUTPUT_SIZE)
 
-    def __call__(self, target, size, neg=False):
+    def __call__(self, target, template, size, neg=False):
         anchor_num = len(cfg.ANCHOR.RATIOS) * len(cfg.ANCHOR.SCALES)
 
         # -1 ignore 0 negative 1 positive
@@ -39,6 +39,13 @@ class AnchorTarget:
             return tuple(p[slt] for p in position), keep_num
 
         tcx, tcy, tw, th = corner2center(target)
+        cx, cy, w, h = corner2center(template)
+
+        # regress from the template, not anchor
+        delta[0] = (tcx - cx) / w
+        delta[1] = (tcy - cy) / h
+        delta[2] = np.log(tw / w)
+        delta[3] = np.log(th / h)
 
         if neg:
             # l = size // 2 - 3
@@ -66,16 +73,16 @@ class AnchorTarget:
             return cls, delta, delta_weight, overlap
 
         anchor_box = self.anchors.all_anchors[0]
-        anchor_center = self.anchors.all_anchors[1]
         x1, y1, x2, y2 = anchor_box[0], anchor_box[1], \
             anchor_box[2], anchor_box[3]
-        cx, cy, w, h = anchor_center[0], anchor_center[1], \
-            anchor_center[2], anchor_center[3]
+        # anchor_center = self.anchors.all_anchors[1]
+        # cx, cy, w, h = anchor_center[0], anchor_center[1], \
+        #     anchor_center[2], anchor_center[3]
 
-        delta[0] = (tcx - cx) / w
-        delta[1] = (tcy - cy) / h
-        delta[2] = np.log(tw / w)
-        delta[3] = np.log(th / h)
+        # delta[0] = (tcx - cx) / w
+        # delta[1] = (tcy - cy) / h
+        # delta[2] = np.log(tw / w)
+        # delta[3] = np.log(th / h)
 
         overlap = IoU([x1, y1, x2, y2], target)
 

@@ -170,10 +170,10 @@ class TrainingDataPreprocessor:
 
         # anchor target setting - here or in the network?
         cls12, delta12, delta_weight12, overlap = self.anchor_target(
-                search_box, cfg.TRAIN.OUTPUT_SIZE, is_neg)
+                search_box, template_box, cfg.TRAIN.OUTPUT_SIZE, is_neg)
 
         cls21, delta21, delta_weight21, overlap = self.anchor_target(
-                template_box, cfg.TRAIN.OUTPUT_SIZE, is_neg)
+                template_box, search_box, cfg.TRAIN.OUTPUT_SIZE, is_neg)
 
         # finally, augment x_pos
         # rx, ry = np.random.randint(-2, 3, 2)
