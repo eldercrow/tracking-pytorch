@@ -24,7 +24,7 @@ class RPN(nn.Module):
         raise NotImplementedError
 
 class UPChannelRPN(RPN):
-    def __init__(self, anchor_num=5, feature_in=256):
+    def __init__(self, anchor_num=1, feature_in=256):
         super(UPChannelRPN, self).__init__()
 
         cls_output = 2 * anchor_num
@@ -121,7 +121,7 @@ class DepthwiseXDiff(nn.Module):
         kernel = self.conv_kernel(kernel)
         search = self.conv_search(search)
 
-        kernel = self.dwconv(kenrel)
+        kernel = self.dwconv(kernel)
         search = self.dwconv(search)
 
         feature = search - kernel.expand_as(search)
@@ -131,44 +131,80 @@ class DepthwiseXDiff(nn.Module):
 
 
 class DepthwiseRPN(RPN):
-    def __init__(self, anchor_num=5, in_channels=256, hiddens=256):
+    def __init__(self, in_channels=256, hiddens=256):
         super(DepthwiseRPN, self).__init__()
-        self.cls = DepthwiseXDiff(in_channels, hiddens, 2 * anchor_num)
-        self.loc = DepthwiseXDiff(in_channels, hiddens, 4 * anchor_num)
-        # self.cls = DepthwiseXCorr(in_channels, hiddens, 2 * anchor_num)
-        # self.loc = DepthwiseXCorr(in_channels, hiddens, 4 * anchor_num)
+        self.preproc = nn.Sequential(
+                nn.Conv2d(in_channels, in_channels, 3, bias=False, groups=in_channels),
+                nn.BatchNorm2d(in_channels),
+                nn.ReLU(inplace=True)
+                )
+        self.head = nn.Sequential(
+                nn.Conv2d(in_channels, hiddens, kernel_size=1, bias=False),
+                nn.BatchNorm2d(hiddens),
+                nn.ReLU(inplace=True)
+                )
+        self.cls = nn.Sequential(
+                nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
+                nn.BatchNorm2d(hiddens),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(hiddens, 2, kernel_size=1)
+                )
+        self.loc = nn.Sequential(
+                nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
+                nn.BatchNorm2d(hiddens),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(hiddens, 4, kernel_size=1)
+                )
+        self.ctr = nn.Sequential(
+                nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
+                nn.BatchNorm2d(hiddens),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(hiddens, 1, kernel_size=1)
+                )
 
     def forward(self, z_f, x_f):
-        cls = self.cls(z_f, x_f)
-        loc = self.loc(z_f, x_f)
-        return cls, loc
+        if isinstance(z_f, (list, tuple)):
+            z_f = torch.cat(z_f, dim=1)
+            x_f = torch.cat(x_f, dim=1)
+
+        search = self.preproc(x_f)
+        kernel = self.preproc(z_f)
+        feature = self.head(xcorr_depthwise(search, kernel))
+        
+        cls = self.cls(feature)
+        loc = self.loc(feature)
+        ctr = self.ctr(feature)
+        return cls, loc, ctr
 
 
 class MultiRPN(RPN):
-    def __init__(self, anchor_num, in_channels, hiddens, weighted=False):
+    def __init__(self, in_channels, hiddens, weighted=False):
         super(MultiRPN, self).__init__()
         self.weighted = weighted
         for i in range(len(in_channels)):
             self.add_module('rpn'+str(i+2),
-                    DepthwiseRPN(anchor_num, in_channels[i], hiddens[i]))
+                    DepthwiseRPN(in_channels[i], hiddens[i]))
         if self.weighted:
             self.cls_weight = nn.Parameter(torch.ones(len(in_channels)))
             self.loc_weight = nn.Parameter(torch.ones(len(in_channels)))
+            self.ctr_weight = nn.Parameter(torch.ones(len(in_channels)))
 
     def forward(self, z_fs, x_fs):
         cls = []
         loc = []
+        ctr = []
         # cls_head = []
         for idx, (z_f, x_f) in enumerate(zip(z_fs, x_fs), start=2):
             rpn = getattr(self, 'rpn'+str(idx))
-            c, l = rpn(z_f, x_f)
+            c, l, t = rpn(z_f, x_f)
             cls.append(c)
             loc.append(l)
+            ctr.append(t)
 
         if self.weighted:
             cls_weight = F.softmax(self.cls_weight, 0)
-            # loc_weight = [0, 0, 1]
             loc_weight = F.softmax(self.loc_weight, 0)
+            ctr_weight = F.softmax(self.ctr_weight, 0)
 
         def avg(lst):
             return sum(lst) / len(lst)
@@ -180,6 +216,8 @@ class MultiRPN(RPN):
             return s
 
         if self.weighted:
-            return weighted_avg(cls, cls_weight), weighted_avg(loc, loc_weight)
+            return weighted_avg(cls, cls_weight), \
+                   weighted_avg(loc, loc_weight), \
+                   weighted_avg(ctr, ctr_weight)
         else:
-            return avg(cls), avg(loc)
+            return avg(cls), avg(loc), avg(ctr)

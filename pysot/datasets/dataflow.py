@@ -10,7 +10,7 @@ from pysot.datasets.augmentation import (
         ShiftScaleAugmentor, ResizeAugmentor,
         ColorJitterAugmentor, GrayscaleAugmentor, MotionBlurAugmentor,
         box_to_point8, point8_to_box)
-from pysot.datasets.anchor_target import AnchorTarget
+from pysot.datasets.anchorless_target import AnchorlessTarget
 from pysot.config import cfg
 
 from torch.utils.data import IterableDataset
@@ -29,37 +29,6 @@ class TPIterableDataset(IterableDataset):
 
     def __len__(self):
         return self._dataflow.__len__()
-
-
-# def aspect_weight(bbox, ratios):
-#     '''
-#     '''
-#     asp = (bbox[2] - bbox[0]) / (bbox[3] - bbox[1])
-#     asp = np.log(asp)
-#     log_ratios = np.log(ratios)
-#
-#     # upper
-#     try:
-#         uidx = np.min(np.where(log_ratios > asp)[0])
-#     except:
-#         uidx = len(ratios) - 1
-#     try:
-#         bidx = np.max(np.where(log_ratios <= asp)[0])
-#     except:
-#         bidx = 0
-#
-#     assert (uidx - bidx) >= 0 and (uidx - bidx) <= 1
-#
-#     weights = np.zeros((len(ratios)), dtype=np.float32)
-#     if uidx == bidx:
-#         weights[uidx] = 1.0
-#     else:
-#         r = log_ratios[uidx] - log_ratios[bidx]
-#         wu = (asp - log_ratios[bidx]) / r
-#         wb = 1 - wu
-#         weights[uidx] = wu
-#         weights[bidx] = wb
-#     return weights
 
 
 class MalformedData(BaseException):
@@ -114,7 +83,8 @@ class TrainingDataPreprocessor:
         #     template_augmentors.append(GrayscaleAugmentor(cfg.DATASET.GRAY))
         self.search_aug = imgaug.AugmentorList(search_augmentors)
 
-        self.anchor_target = AnchorTarget()
+        # self.anchor_target = AnchorTarget()
+        self.anchorless_target = AnchorlessTarget()
 
     def __call__(self, datum_dict):
         '''
@@ -149,36 +119,21 @@ class TrainingDataPreprocessor:
         points = box_to_point8(template_box).astype(np.float32)
         points = tfms_t.apply_coords(points)
         template_box = point8_to_box(points)
-        # template_box = np.reshape(template_box, [-1, 4])
-
-        # w_anchor = aspect_weight(template_box, cfg.ANCHOR.RATIOS)
 
         search_image = tfms_s.apply_image(search_image)
         points = box_to_point8(search_box).astype(np.float32)
         points = tfms_s.apply_coords(points)
         search_box = point8_to_box(points)
 
-        # centering
-        hh, ww = search_image.shape[:2]
-        search_box = np.array(search_box, dtype=np.float32)
-        # search_box -= np.array([ww/2.0, hh/2.0, ww/2.0, hh/2.0], dtype=np.float32)
-        # search_box = np.reshape(search_box, [-1, 4])
+        cls12, delta12, delta_weight12, centerness12 = self.anchorless_target(
+                search_box, cfg.TRAIN.SEARCH_SIZE, is_neg)
 
-        # # get scaled bounding box
-        # template_box = self._get_bbox(template_image, template[1])
-        # search_box = self._get_bbox(search_image, search[1])
+        # cls21, delta21, delta_weight21, centerness21 = self.anchorless_target(
+        #         template_box, cfg.TRAIN.SEARCH_SIZE, is_neg)
 
-        # anchor target setting - here or in the network?
-        cls12, delta12, delta_weight12, overlap = self.anchor_target(
-                search_box, template_box, cfg.TRAIN.OUTPUT_SIZE, is_neg)
-
-        cls21, delta21, delta_weight21, overlap = self.anchor_target(
-                template_box, search_box, cfg.TRAIN.OUTPUT_SIZE, is_neg)
-
-        # finally, augment x_pos
-        # rx, ry = np.random.randint(-2, 3, 2)
-        # x_pos[0::2] += rx
-        # x_pos[1::2] += ry
+        # centering boxes
+        # search_box -= cfg.TRAIN.SEARCH_SIZE / 2.0
+        # template_box -= cfg.TRAIN.SEARCH_SIZE / 2.0
 
         ret = { \
                 'template': np.transpose(template_image, (2, 0, 1)).astype(np.float32),
@@ -186,13 +141,14 @@ class TrainingDataPreprocessor:
                 'label_cls12': cls12,
                 'label_loc12': delta12,
                 'label_loc_weight12': delta_weight12,
+                'label_centerness12': centerness12,
                 'search_box': search_box,
-                'label_cls21': cls21,
-                'label_loc21': delta21,
-                'label_loc_weight21': delta_weight21,
+                # 'label_cls21': cls21,
+                # 'label_loc21': delta21,
+                # 'label_loc_weight21': delta_weight21,
+                # 'label_centerness21': centerness21,
                 'template_box': template_box,
                 }
-                # 'template_box': template_box
         return ret
 
 

@@ -80,12 +80,14 @@ def build_data_loader():
 
 def build_opt_lr(model, current_epoch=0):
     if current_epoch >= cfg.BACKBONE.TRAIN_EPOCH:
-        for layer in cfg.BACKBONE.TRAIN_LAYERS:
-            for param in getattr(model.backbone, layer).parameters():
-                param.requires_grad = True
-            for m in getattr(model.backbone, layer).modules():
-                if isinstance(m, nn.BatchNorm2d):
-                    m.train()
+        # for layer in cfg.BACKBONE.TRAIN_LAYERS:
+        # for param in getattr(model.backbone, layer).parameters():
+        for param in model.backbone.parameters():
+            param.requires_grad = True
+        # for m in getattr(model.backbone, layer).modules():
+        for m in model.backbone.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.train()
     else:
         for param in model.backbone.parameters():
             param.requires_grad = False
@@ -228,7 +230,11 @@ def train(train_loader, model, optimizer, lr_scheduler, tb_writer):
         batch_info['batch_time'] = average_reduce(batch_time)
         batch_info['data_time'] = average_reduce(data_time)
         for k, v in sorted(outputs.items()):
-            batch_info[k] = average_reduce(v.data.item())
+            try:
+                batch_info[k] = average_reduce(v.data.item())
+            except:
+                import ipdb
+                ipdb.set_trace()
 
         average_meter.update(**batch_info)
 

@@ -5,6 +5,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import torch
 import torch.nn as nn
 
 
@@ -19,6 +20,9 @@ class AdjustLayer(nn.Module):
         self.center_size = center_size
 
     def forward(self, x):
+        if isinstance(x, (list, tuple)):
+            x = torch.cat(x, dim=1)
+
         x = self.downsample(x)
         if x.size(3) < 20:
             l = (x.size(3) - self.center_size) // 2

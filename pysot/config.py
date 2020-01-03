@@ -33,7 +33,7 @@ __C.TRAIN.POS_NUM = 16
 # Number of anchors per images
 __C.TRAIN.TOTAL_NUM = 64
 
-__C.TRAIN.EXEMPLAR_SIZE = 255 #127
+__C.TRAIN.EXEMPLAR_SIZE = 127
 __C.TRAIN.SEARCH_SIZE = 255
 __C.TRAIN.BASE_SIZE = 8
 __C.TRAIN.OUTPUT_SIZE = 25
@@ -54,6 +54,7 @@ __C.TRAIN.WEIGHT_DECAY = 0.0001
 
 __C.TRAIN.CLS_WEIGHT = 1.0
 __C.TRAIN.LOC_WEIGHT = 1.2
+__C.TRAIN.CTR_WEIGHT = 1.0
 
 __C.TRAIN.PRINT_FREQ = 100
 __C.TRAIN.LOG_GRADS = False
@@ -82,7 +83,7 @@ __C.DATASET = CN(new_allowed=True)
 # Augmentation
 __C.DATASET.TEMPLATE = CN()
 __C.DATASET.TEMPLATE.PAD_RATIO = 2
-__C.DATASET.TEMPLATE.SHIFT = 1.0 #4.0 / 64.0 #4
+__C.DATASET.TEMPLATE.SHIFT = 4.0 / 64.0 #4
 __C.DATASET.TEMPLATE.SCALE = 1.1111
 __C.DATASET.TEMPLATE.ASPECT = 1.1
 __C.DATASET.TEMPLATE.BLUR = 0.0
@@ -241,6 +242,16 @@ __C.ANCHOR.ANCHOR_NUM = len(__C.ANCHOR.RATIOS) * len(__C.ANCHOR.SCALES)
 
 
 # ------------------------------------------------------------------------ #
+# Anchorless options
+# ------------------------------------------------------------------------ #
+__C.ANCHORLESS = CN()
+
+__C.ANCHORLESS.STRIDE = 8
+__C.ANCHORLESS.SCALE = 64
+__C.ANCHORLESS.OFFSET = 0.5
+
+
+# ------------------------------------------------------------------------ #
 # Tracker options
 # ------------------------------------------------------------------------ #
 __C.TRACK = CN()
@@ -257,7 +268,7 @@ __C.TRACK.WINDOW_INFLUENCE = 0.44
 __C.TRACK.LR = 0.4
 
 # Exemplar size
-__C.TRACK.EXEMPLAR_SIZE = 127
+__C.TRACK.EXEMPLAR_SIZE = 255
 
 # Instance size
 __C.TRACK.INSTANCE_SIZE = 255
