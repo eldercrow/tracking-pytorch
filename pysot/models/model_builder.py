@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torchvision.ops import RoIAlign
+# from torchvision.ops import RoIAlign
 
 from pysot.config import cfg
 from pysot.models.loss import select_cross_entropy_loss, weight_l1_loss, select_bce_loss
@@ -31,12 +31,8 @@ class ModelBuilder(nn.Module):
         self.neck = get_neck(cfg.ADJUST.TYPE,
                              **cfg.ADJUST.KWARGS)
 
-        # build non-local layer
-        # self.non_local = get_nonlocal(cfg.NONLOCAL.TYPE,
-        #                               **cfg.NONLOCAL.KWARGS)
-
         # roi align for cropping center
-        self.roi_align = RoIAlign((7, 7), 1.0 / cfg.ANCHOR.STRIDE, 1)
+        # self.roi_align = RoIAlign((7, 7), 1.0 / cfg.ANCHOR.STRIDE, 1)
 
         # build rpn head
         self.rpn_head = get_rpn_head(cfg.RPN.TYPE,
@@ -44,36 +40,18 @@ class ModelBuilder(nn.Module):
 
     def template(self, z):
         zf = self.backbone(z)
-        if cfg.ADJUST.ADJUST:
-            zf = self.neck(zf)
-        zf = self.non_local(zf)
+        zf = self.neck(zf)
         self.zf = zf
 
     def track(self, x):
         xf = self.backbone(x)
         xf = self.neck(xf)
-        xf = self.non_local(xf)
-        cls, loc = self.rpn_head(self.zf, xf)
+        cls, loc, ctr = self.rpn_head(self.zf, xf)
         return {
                 'cls': cls,
                 'loc': loc,
+                'ctr': ctr,
                }
-
-    # def track_ls(self, x, ft1=None):
-    #     assert not cfg.MASK.MASK
-    #     xf = self.backbone(x)
-    #     if cfg.ADJUST.ADJUST:
-    #         xf = self.neck(xf)
-
-    #     if ft1 is not None:
-    #         self.zf[-1] = ft1
-
-    #     cls, loc = self.rpn_head(self.zf, xf)
-    #     return {
-    #             'cls': cls,
-    #             'loc': loc,
-    #             'ft': xf[-1]
-    #            }
 
     def log_softmax(self, cls):
         cls = cls.permute(0, 2, 3, 1).contiguous()

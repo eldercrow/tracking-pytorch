@@ -15,54 +15,53 @@ from pysot.utils.bbox import IoU, center2corner
 from pysot.tracker.base_tracker import SiameseTracker
 
 
-class SiamRPNTracker(SiameseTracker):
+class SiamCARTracker(SiameseTracker):
     def __init__(self, model):
-        #
-        super(SiamRPNTracker, self).__init__()
-        #
+        super(SiamCARTracker, self).__init__()
         self.score_size = (cfg.TRACK.INSTANCE_SIZE - cfg.TRACK.EXEMPLAR_SIZE) // \
-            cfg.ANCHOR.STRIDE + 1 + cfg.TRACK.BASE_SIZE
-        self.anchor_num = len(cfg.ANCHOR.RATIOS) * len(cfg.ANCHOR.SCALES)
+            cfg.ANCHORLESS.STRIDE + 1 + cfg.TRACK.BASE_SIZE
         hanning = np.hanning(self.score_size)
         window = np.outer(hanning, hanning)
-        self.window = np.tile(window.flatten(), self.anchor_num)
+        self.window = window.flatten()
         # self.window = np.power(np.tile(window.flatten(), self.anchor_num), cfg.TRACK.WINDOW_INFLUENCE)
-        self.anchors = self.generate_anchor(self.score_size)
+        self.centers = self.generate_center(self.score_size)
         self.model = model
         self.model.eval()
 
-    def generate_anchor(self, score_size):
-        anchors = Anchors(cfg.ANCHOR.STRIDE,
-                          cfg.ANCHOR.RATIOS,
-                          cfg.ANCHOR.SCALES)
-        anchor = anchors.anchors
-        x1, y1, x2, y2 = anchor[:, 0], anchor[:, 1], anchor[:, 2], anchor[:, 3]
-        anchor = np.stack([(x1+x2)*0.5, (y1+y2)*0.5, x2-x1, y2-y1], 1)
-        total_stride = anchors.stride
-        anchor_num = anchor.shape[0]
-        anchor = np.tile(anchor, score_size * score_size).reshape((-1, 4))
-        ori = - (score_size // 2) * total_stride
-        xx, yy = np.meshgrid([ori + total_stride * dx for dx in range(score_size)],
-                             [ori + total_stride * dy for dy in range(score_size)])
-        xx, yy = np.tile(xx.flatten(), (anchor_num, 1)).flatten(), \
-            np.tile(yy.flatten(), (anchor_num, 1)).flatten()
-        anchor[:, 0], anchor[:, 1] = xx.astype(np.float32), yy.astype(np.float32)
-        return anchor
+        # self.long_short = long_short
 
-    def _convert_bbox(self, delta, anchor):
+    def generate_center(self, score_size):
+        X, Y = np.meshgrid(np.arange(score_size), np.arange(score_size))
+
+        # center of grid is 0
+        centers = np.stack([X, Y], axis=0).astype(np.float32) + 0.5 - score_size / 2.0
+        centers *= cfg.ANCHORLESS.STRIDE
+
+        centers = np.reshape(centers, (2, -1))
+
+        return centers
+
+    def _convert_bbox(self, delta, center):
         delta = delta.permute(1, 2, 3, 0).contiguous().view(4, -1)
         delta = delta.data.cpu().numpy()
 
-        delta[0, :] = delta[0, :] * anchor[:, 2] + anchor[:, 0]
-        delta[1, :] = delta[1, :] * anchor[:, 3] + anchor[:, 1]
-        delta[2, :] = np.exp(delta[2, :]) * anchor[:, 2]
-        delta[3, :] = np.exp(delta[3, :]) * anchor[:, 3]
-        return delta
+        delta = (delta + cfg.ANCHORLESS.OFFSET) * cfg.ANCHORLESS.SCALE
+
+        cx = center[0] + (delta[2] - delta[0])
+        cy = center[1] + (delta[3] - delta[1])
+        w = delta[0] + delta[2]
+        h = delta[1] + delta[3]
+        return np.stack([cx, cy, w, h], axis=0)
 
     def _convert_score(self, score):
         score = score.permute(1, 2, 3, 0).contiguous().view(2, -1).permute(1, 0)
         score = F.softmax(score, dim=1).data[:, 1].cpu().numpy()
         return score
+
+    def _convert_centerness(self, centerness):
+        centerness = centerness.permute(1, 2, 3, 0).contiguous().view(-1)
+        centerness = torch.sigmoid(centerness).detach().cpu().numpy()
+        return centerness
 
     def _bbox_clip(self, cx, cy, width, height, boundary):
         cx = max(0, min(cx, boundary[1]))
@@ -77,6 +76,7 @@ class SiamRPNTracker(SiameseTracker):
             img(np.ndarray): BGR image
             bbox: (x, y, w, h) bbox
         """
+        self.bbox0 = [b for b in bbox]
         self.center_pos = np.array([bbox[0]+(bbox[2]-1)/2,
                                     bbox[1]+(bbox[3]-1)/2])
         self.size = np.array([bbox[2], bbox[3]])
@@ -96,7 +96,6 @@ class SiamRPNTracker(SiameseTracker):
                                     s_z, self.channel_average)
         self.model.template(z_crop)
         zf = self.model.zf
-        self.xf_crops = zf
 
     def track(self, img):
         """
@@ -121,7 +120,10 @@ class SiamRPNTracker(SiameseTracker):
         outputs = self.model.track(x_crop)
 
         score = self._convert_score(outputs['cls'])
-        pred_bbox = self._convert_bbox(outputs['loc'], self.anchors)
+        pred_bbox = self._convert_bbox(outputs['loc'], self.centers)
+        centerness = self._convert_centerness(outputs['ctr'])
+
+        score *= centerness
 
         def change(r):
             return np.maximum(r, 1. / r)
@@ -146,8 +148,11 @@ class SiamRPNTracker(SiameseTracker):
             self.window * cfg.TRACK.WINDOW_INFLUENCE
         best_idx = np.argmax(pscore)
 
+        # import ipdb
+        # ipdb.set_trace()
         bbox = pred_bbox[:, best_idx]
-        iou = IoU(center2corner(bbox), center2corner(np.transpose(self.anchors)))
+        # bbox[:2] += cfg.TRACK.INSTANCE_SIZE / 2.0
+        # iou = IoU(center2corner(bbox), center2corner(np.transpose(self.anchors)))
         bbox /= scale_z
         lr = penalty[best_idx] * score[best_idx] * cfg.TRACK.LR
 
@@ -172,17 +177,11 @@ class SiamRPNTracker(SiameseTracker):
                 height]
         best_score = score[best_idx]
 
-        # crop search region for feature transform
-        _, iy, ix = np.unravel_index(best_idx, [5, 25, 25])
-        iy += 3
-        ix += 3
-        self.xf_crops = [o[:, :, iy-3:iy+4, ix-3:ix+4].contiguous() for o in outputs['xf']]
-
         return {
                 'bbox': bbox,
                 'best_score': best_score,
                 'best_idx': best_idx,
                 'pscore': pscore,
                 'score': score,
-                'xf': outputs['xf'],
                }
+

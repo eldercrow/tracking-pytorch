@@ -17,7 +17,7 @@ class AnchorlessTarget:
         X, Y = np.meshgrid(np.arange(cfg.TRAIN.OUTPUT_SIZE),
                            np.arange(cfg.TRAIN.OUTPUT_SIZE))
 
-        self.centers = np.stack([X, Y]).astype(np.float32) + 0.5 - cfg.TRAIN.OUTPUT_SIZE / 2.0
+        self.centers = np.stack([X, Y], axis=0).astype(np.float32) + 0.5 - cfg.TRAIN.OUTPUT_SIZE / 2.0
         self.centers *= cfg.ANCHORLESS.STRIDE
 
     def __call__(self, target, sz_img, neg=False):

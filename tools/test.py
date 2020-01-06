@@ -12,7 +12,7 @@ import cv2
 import torch
 import numpy as np
 
-from pysot.core.config import cfg
+from pysot.config import cfg
 from pysot.models.model_builder import ModelBuilder
 from pysot.tracker.tracker_builder import build_tracker
 from pysot.utils.bbox import get_axis_aligned_bbox
@@ -92,8 +92,8 @@ def main():
                 elif idx > frame_counter:
                     outputs = tracker.track(img)
                     pred_bbox = outputs['bbox']
-                    if cfg.MASK.MASK:
-                        pred_bbox = outputs['polygon']
+                    # if cfg.MASK.MASK:
+                    #     pred_bbox = outputs['polygon']
                     overlap = vot_overlap(pred_bbox, gt_bbox, (img.shape[1], img.shape[0]))
                     if overlap > 0:
                         # not lost
@@ -111,13 +111,13 @@ def main():
                 if args.vis and idx > frame_counter:
                     cv2.polylines(img, [np.array(gt_bbox, np.int).reshape((-1, 1, 2))],
                             True, (0, 255, 0), 3)
-                    if cfg.MASK.MASK:
-                        cv2.polylines(img, [np.array(pred_bbox, np.int).reshape((-1, 1, 2))],
-                                True, (0, 255, 255), 3)
-                    else:
-                        bbox = list(map(int, pred_bbox))
-                        cv2.rectangle(img, (bbox[0], bbox[1]),
-                                      (bbox[0]+bbox[2], bbox[1]+bbox[3]), (0, 255, 255), 3)
+                    # if cfg.MASK.MASK:
+                    #     cv2.polylines(img, [np.array(pred_bbox, np.int).reshape((-1, 1, 2))],
+                    #             True, (0, 255, 255), 3)
+                    # else:
+                    bbox = list(map(int, pred_bbox))
+                    cv2.rectangle(img, (bbox[0], bbox[1]),
+                                  (bbox[0]+bbox[2], bbox[1]+bbox[3]), (0, 255, 255), 3)
                     cv2.putText(img, str(idx), (40, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
                     cv2.putText(img, str(lost_number), (40, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                     cv2.imshow(video.name, img)
