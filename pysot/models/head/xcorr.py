@@ -46,3 +46,37 @@ def xcorr_depthwise(x, kernel):
     out = F.conv2d(x, kernel, groups=batch*channel)
     out = out.view(batch, channel, out.size(2), out.size(3))
     return out
+
+
+# Inherit from Function
+class L1DiffFunction(torch.autograd.Function):
+
+    # Note that both forward and backward are @staticmethods
+    @staticmethod
+    # bias is an optional argument
+    def forward(ctx, lhs, rhs):
+        diff = lhs - rhs
+        ctx.save_for_backward(lhs, rhs, diff)
+        return diff
+
+    # This function has only a single output, so it gets only one gradient
+    @staticmethod
+    def backward(ctx, grad_output):
+        # This is a pattern that is very convenient - at the top of backward
+        # unpack saved_tensors and initialize all gradients w.r.t. inputs to
+        # None. Thanks to the fact that additional trailing Nones are
+        # ignored, the return statement is simple even when the function has
+        # optional inputs.
+        lhs, rhs, diff = ctx.saved_tensors
+        grad_lhs = grad_rhs = None
+
+        # These needs_input_grad checks are optional and there only to
+        # improve efficiency. If you want to make your code simpler, you can
+        # skip them. Returning gradients for inputs that don't require it is
+        # not an error.
+        if ctx.needs_input_grad[0]:
+            grad_lhs = grad_output * diff
+        if ctx.needs_input_grad[1]:
+            grad_rhs = -grad_output * diff
+
+        return grad_lhs, grad_rhs

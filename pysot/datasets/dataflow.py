@@ -46,7 +46,6 @@ class TrainingDataPreprocessor:
         # augmentations:
         #   shift, scale, blur, flip, grayscale
         template_augmentors = [
-            ColorJitterAugmentor(),
             ShiftScaleAugmentor(
                 self.cfg.DATASET.TEMPLATE.PAD_RATIO,
                 self.cfg.DATASET.TEMPLATE.SHIFT,
@@ -55,6 +54,7 @@ class TrainingDataPreprocessor:
                 self.cfg.TRAIN.EXEMPLAR_SIZE,
                 self.cfg.PREPROC.PIXEL_MEAN[::-1]),
             # ResizeAugmentor(self.cfg.TRAIN.EXEMPLAR_SIZE),
+            ColorJitterAugmentor(),
         ]
         if self.cfg.DATASET.TEMPLATE.BLUR:
             template_augmentors.append(
@@ -65,7 +65,6 @@ class TrainingDataPreprocessor:
         self.template_aug = imgaug.AugmentorList(template_augmentors)
 
         search_augmentors = [
-            ColorJitterAugmentor(),
             ShiftScaleAugmentor(
                 self.cfg.DATASET.SEARCH.PAD_RATIO,
                 self.cfg.DATASET.SEARCH.SHIFT,
@@ -74,6 +73,7 @@ class TrainingDataPreprocessor:
                 self.cfg.TRAIN.SEARCH_SIZE,
                 self.cfg.PREPROC.PIXEL_MEAN[::-1]),
             # ResizeAugmentor(self.cfg.TRAIN.SEARCH_SIZE),
+            ColorJitterAugmentor(),
         ]
         if self.cfg.DATASET.SEARCH.BLUR:
             search_augmentors.append(

@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 from torchvision.ops import roi_align
 
-from pysot.models.head.xcorr import xcorr_fast, xcorr_depthwise
+from pysot.models.head.xcorr import xcorr_fast, xcorr_depthwise, L1DiffFunction
 from pysot.models.init_weight import init_weights
 from pysot.models.head.transformer import Transformer
 
@@ -124,7 +124,7 @@ class DepthwiseXDiff(nn.Module):
         kernel = self.dwconv(kernel)
         search = self.dwconv(search)
 
-        feature = search - kernel.expand_as(search)
+        feature = L1DiffFunction(search, kernel.expand_as(search))
 
         out = self.head(feature)
         return out
@@ -170,7 +170,7 @@ class DepthwiseRPN(RPN):
         search = self.preproc(x_f)
         kernel = self.preproc(z_f)
         feature = self.head(xcorr_depthwise(search, kernel))
-        
+
         cls = self.cls(feature)
         loc = self.loc(feature)
         ctr = self.ctr(feature)
