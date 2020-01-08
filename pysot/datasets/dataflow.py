@@ -10,7 +10,8 @@ from pysot.datasets.augmentation import (
         ShiftScaleAugmentor, ResizeAugmentor,
         ColorJitterAugmentor, GrayscaleAugmentor, MotionBlurAugmentor,
         box_to_point8, point8_to_box)
-from pysot.datasets.anchorless_target import AnchorlessTarget
+# from pysot.datasets.anchorless_target import AnchorlessTarget
+from pysot.datasets.anchor_target import AnchorTarget
 from pysot.config import cfg
 
 from torch.utils.data import IterableDataset
@@ -83,8 +84,8 @@ class TrainingDataPreprocessor:
         #     template_augmentors.append(GrayscaleAugmentor(cfg.DATASET.GRAY))
         self.search_aug = imgaug.AugmentorList(search_augmentors)
 
-        # self.anchor_target = AnchorTarget()
-        self.anchorless_target = AnchorlessTarget()
+        self.anchor_target = AnchorTarget()
+        # self.anchorless_target = AnchorlessTarget()
 
     def __call__(self, datum_dict):
         '''
@@ -125,29 +126,21 @@ class TrainingDataPreprocessor:
         points = tfms_s.apply_coords(points)
         search_box = point8_to_box(points)
 
-        cls12, delta12, delta_weight12, centerness12 = self.anchorless_target(
-                search_box, cfg.TRAIN.SEARCH_SIZE, is_neg)
-
-        # cls21, delta21, delta_weight21, centerness21 = self.anchorless_target(
-        #         template_box, cfg.TRAIN.SEARCH_SIZE, is_neg)
-
-        # centering boxes
-        # search_box -= cfg.TRAIN.SEARCH_SIZE / 2.0
-        # template_box -= cfg.TRAIN.SEARCH_SIZE / 2.0
+        cls, centerness, anchor_2nd, iou_2nd, ctr_2nd, delta_2nd, delta_w_2nd = \
+                self.anchor_target(search_box, cfg.TRAIN.SEARCH_SIZE, is_neg)
 
         ret = { \
                 'template': np.transpose(template_image, (2, 0, 1)).astype(np.float32),
                 'search': np.transpose(search_image, (2, 0, 1)).astype(np.float32),
-                'label_cls12': cls12,
-                'label_loc12': delta12,
-                'label_loc_weight12': delta_weight12,
-                'label_centerness12': centerness12,
-                'search_box': search_box,
-                # 'label_cls21': cls21,
-                # 'label_loc21': delta21,
-                # 'label_loc_weight21': delta_weight21,
-                # 'label_centerness21': centerness21,
                 'template_box': template_box,
+                'search_box': search_box,
+                'label_cls': cls,
+                'label_ctr': centerness,
+                'anchor_2nd': anchor_2nd,
+                'label_iou_2nd': iou_2nd,
+                'label_ctr_2nd': ctr_2nd,
+                'label_delta_2nd': delta_2nd,
+                'label_delta_w_2nd': delta_w_2nd,
                 }
         return ret
 

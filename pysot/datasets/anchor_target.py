@@ -14,20 +14,42 @@ from pysot.utils.anchor import Anchors
 
 class AnchorTarget:
     def __init__(self,):
-        self.anchors = Anchors(cfg.ANCHOR.STRIDE,
-                               cfg.ANCHOR.RATIOS,
-                               cfg.ANCHOR.SCALES)
+        X, Y = np.meshgrid(np.arange(cfg.TRAIN.OUTPUT_SIZE),
+                           np.arange(cfg.TRAIN.OUTPUT_SIZE))
 
-        self.anchors.generate_all_anchors(im_c=cfg.TRAIN.SEARCH_SIZE / 2.0,
-                                          size=cfg.TRAIN.OUTPUT_SIZE)
+        self.centers = np.stack([X, Y], axis=0).astype(np.float32)
+        self.centers += (0.5 - cfg.TRAIN.OUTPUT_SIZE / 2.0)
 
-    def __call__(self, target, template, size, neg=False):
+        self.anchors = []
+        for s in cfg.ANCHOR.SCALES:
+            for r in cfg.ANCHOR.RATIOS:
+                sx2 = s * np.sqrt(r) / 2.0
+                sy2 = s / np.sqrt(r) / 2.0
+
+                x0 = self.centers[0] - sx2
+                y0 = self.centers[1] - sy2
+                x1 = self.centers[0] + sx2
+                y1 = self.centers[1] + sy2
+
+                self.anchors.append(np.stack([x0, y0, x1, y1], axis=0))
+        self.anchors = np.transpose(np.stack(self.anchors, axis=0), (1, 0, 2, 3))
+
+        self.centers *= cfg.ANCHOR.STRIDE
+        self.anchors *= cfg.ANCHOR.STRIDE
+
+    def __call__(self, target, sz_img, is_neg=False):
         anchor_num = len(cfg.ANCHOR.RATIOS) * len(cfg.ANCHOR.SCALES)
 
+        sz_anc = cfg.TRAIN.OUTPUT_SIZE
+
         # -1 ignore 0 negative 1 positive
-        cls = -1 * np.ones((anchor_num, size, size), dtype=np.int64)
-        delta = np.zeros((4, anchor_num, size, size), dtype=np.float32)
-        delta_weight = np.zeros((anchor_num, size, size), dtype=np.float32)
+        cls = -1 * np.ones((anchor_num, sz_anc, sz_anc), dtype=np.int64)
+        centerness = -1 * np.ones((sz_anc, sz_anc), dtype=np.float32)
+
+        # for 2nd stage
+        rcnn_delta = np.zeros((4, cfg.RCNN.NUM_ROI), dtype=np.float32)
+        rcnn_iou = -1 * np.ones((cfg.RCNN.NUM_ROI,), dtype=np.float32)
+        rcnn_ctr = -1 * np.ones((cfg.RCNN.NUM_ROI,), dtype=np.float32)
 
         def select(position, keep_num=16):
             num = position[0].shape[0]
@@ -38,70 +60,85 @@ class AnchorTarget:
             slt = slt[:keep_num]
             return tuple(p[slt] for p in position), keep_num
 
-        tcx, tcy, tw, th = corner2center(target)
-        cx, cy, w, h = corner2center(template)
+        # centering target
+        target_c = target - sz_img / 2.0
+        
+        # compute anchor IoU
+        overlap = IoU(self.anchors, target_c) # (5, 25, 25)
 
-        # regress from the template, not anchor
-        delta[0] = (tcx - cx) / w
-        delta[1] = (tcy - cy) / h
-        delta[2] = np.log(tw / w)
-        delta[3] = np.log(th / h)
+        # centerness
+        x0, y0, x1, y1 = target_c
+        delta = np.stack([self.centers[0] - x0, \
+                          self.centers[1] - y0, \
+                          x1 - self.centers[0], \
+                          y1 - self.centers[1]], axis=0)
+        delta = np.maximum(delta, 0)
+        Mdx = np.maximum(delta[0], delta[2])
+        mdx = np.minimum(delta[0], delta[2])
+        Mdy = np.maximum(delta[1], delta[3])
+        mdy = np.minimum(delta[1], delta[3])
+        ctr = np.sqrt((mdx / (Mdx + 1e-08)) * (mdy / (Mdy + 1e-08)))
 
-        if neg:
-            # l = size // 2 - 3
-            # r = size // 2 + 3 + 1
-            # cls[:, l:r, l:r] = 0
-
-            # import ipdb
-            # ipdb.set_trace()
-
-            cx = size // 2
-            cy = size // 2
-            cx = int(np.around(cx + (tcx - cfg.TRAIN.SEARCH_SIZE / 2.0) / cfg.ANCHOR.STRIDE))
-            cy = int(np.around(cy + (tcy - cfg.TRAIN.SEARCH_SIZE / 2.0) / cfg.ANCHOR.STRIDE))
-            l = max(0, cx - 3)
-            r = min(size, cx + 4)
-            u = max(0, cy - 3)
-            d = min(size, cy + 4)
-            cls[:, u:d, l:r] = 0
-
-            neg, neg_num = select(np.where(cls == 0), cfg.TRAIN.NEG_NUM)
-            cls[:] = -1
-            cls[neg] = 0
-
-            overlap = np.zeros((anchor_num, size, size), dtype=np.float32)
-            return cls, delta, delta_weight, overlap
-
-        anchor_box = self.anchors.all_anchors[0]
-        x1, y1, x2, y2 = anchor_box[0], anchor_box[1], \
-            anchor_box[2], anchor_box[3]
-        # anchor_center = self.anchors.all_anchors[1]
-        # cx, cy, w, h = anchor_center[0], anchor_center[1], \
-        #     anchor_center[2], anchor_center[3]
-
-        # delta[0] = (tcx - cx) / w
-        # delta[1] = (tcy - cy) / h
-        # delta[2] = np.log(tw / w)
-        # delta[3] = np.log(th / h)
-
-        overlap = IoU([x1, y1, x2, y2], target)
-
+        # classification target
         pos = np.where( \
             np.logical_or(overlap > cfg.TRAIN.THR_HIGH, overlap == np.max(overlap)) \
             )
         neg = np.where( \
             np.logical_and(overlap < cfg.TRAIN.THR_LOW, overlap < np.max(overlap)) \
             )
-        # att_mask = np.zeros_like(overlap) #np.max(overlap, axis=0) < cfg.TRAIN.THR_LOW
 
-        # _, iy, ix = np.unravel_index(np.argmax(overlap), [int(anchor_num), size, size])
-        # x_pos = np.reshape(np.array([ix-2, iy-2, ix+3, iy+3]).astype(np.float32), (1, 4))
-
+        pos_2nd, nn = select(pos, cfg.RCNN.NUM_ROI)
+        if nn < cfg.RCNN.NUM_ROI:
+            ridx = np.random.randint(0, nn, cfg.RCNN.NUM_ROI)
+            p2 = [p[ridx] for p in pos_2nd]
+            pos_2nd = tuple(p2)
         pos, pos_num = select(pos, cfg.TRAIN.POS_NUM)
         neg, neg_num = select(neg, cfg.TRAIN.TOTAL_NUM - cfg.TRAIN.POS_NUM)
 
-        cls[pos] = 1
-        delta_weight[pos] = 1. / (pos_num + 1e-6)
+        # (4, NUM_ROI)
+        anchor_2nd = np.stack([self.anchors[0][pos_2nd], \
+                               self.anchors[1][pos_2nd], \
+                               self.anchors[2][pos_2nd], \
+                               self.anchors[3][pos_2nd]], axis=0)
 
+        if is_neg:
+            cls[pos] = 0
+            centerness[pos[1:]] = 0
+            ctr_2nd = np.zeros((cfg.RCNN.NUM_ROI,), dtype=np.float32)
+            iou_2nd = np.zeros((cfg.RCNN.NUM_ROI,), dtype=np.float32)
+
+            # for roi align
+            anchor_2nd = np.transpose(anchor_2nd, (1, 0)) + (sz_anc / 2.0 * cfg.ANCHOR.STRIDE)
+            delta_2nd = np.zeros_like(anchor_2nd)
+            delta_w_2nd = np.zeros((cfg.RCNN.NUM_ROI,), dtype=np.float32)
+
+            return cls, centerness, anchor_2nd, iou_2nd, ctr_2nd, delta_2nd, delta_w_2nd
+
+        cls[pos] = 1
         cls[neg] = 0
-        return cls, delta, delta_weight, overlap
+        centerness[pos[1:]] = ctr[pos[1:]]
+        centerness[neg[1:]] = np.maximum(ctr[neg[1:]], 0)
+
+        # 2nd stage
+        # regression target 
+        # centerness
+        # iou
+        ctr_2nd = ctr[pos_2nd[1:]]
+        iou_2nd = overlap[pos_2nd]
+
+        import ipdb
+        ipdb.set_trace()
+
+        tcx, tcy, tw, th = corner2center(target_c)
+        cx, cy, w, h = corner2center(anchor_2nd)
+        delta_2nd = np.stack([(tcx - cx) / w, \
+                              (tcy - cy) / h, \
+                              np.log(tw / w), \
+                              np.log(th / h)], axis=0)
+        
+        # for roi align
+        anchor_2nd = np.transpose(anchor_2nd, (1, 0)) + (sz_anc / 2.0 * cfg.ANCHOR.STRIDE)
+        delta_2nd = np.transpose(delta_2nd, (1, 0))
+        delta_w_2nd = np.ones((cfg.RCNN.NUM_ROI,), dtype=np.float32) / cfg.RCNN.NUM_ROI
+
+        return cls, centerness, anchor_2nd, iou_2nd, ctr_2nd, delta_2nd, delta_w_2nd

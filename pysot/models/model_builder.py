@@ -67,18 +67,18 @@ class ModelBuilder(nn.Module):
         """
         template = data['template'].cuda()
         search = data['search'].cuda()
-        # template_box = data['template_box'].cuda()
-        # search_box = data['search_box'].cuda()
+        template_box = data['template_box'].cuda()
+        search_box = data['search_box'].cuda()
+
         # 12: from template to search
-        label_cls12 = data['label_cls12'].cuda()
-        label_loc12 = data['label_loc12'].cuda()
-        label_loc_weight12 = data['label_loc_weight12'].cuda()
-        label_centerness12 = data['label_centerness12'].cuda()
-        # 21: from search to template
-        # label_cls21 = data['label_cls21'].cuda()
-        # label_loc21 = data['label_loc21'].cuda()
-        # label_loc_weight21 = data['label_loc_weight21'].cuda()
-        # label_centerness21 = data['label_centerness21'].cuda()
+        label_cls = data['label_cls'].cuda()
+        label_centerness = data['label_ctr'].cuda()
+
+        anchor_2nd = data['anchor_2nd'].cuda()
+        label_iou_2nd = data['label_iou_2nd'].cuda()
+        label_ctr_2nd = data['label_ctr_2nd'].cuda()
+        label_delta_2nd = data['label_delta_2nd'].cuda()
+        label_delta_w_2nd = data['label_delta_w_2nd'].cuda()
 
         # get feature
         zf = self.backbone(template)
@@ -86,19 +86,16 @@ class ModelBuilder(nn.Module):
         # neck
         zf = self.neck(zf)
         xf = self.neck(xf)
-        # non-local
-        # zf = self.non_local(zf)
-        # xf = self.non_local(xf)
 
         # crop
         # first adjust coordinate
-        # hh, ww = zf[0].shape[2:4] if isinstance(zf, (list, tuple)) else zf.shape[2:4]
-        # assert hh == ww
-        # offset = (hh / 2.0 - 0.5) * cfg.ANCHORLESS.STRIDE
-        # template_box += offset
+        hh, ww = zf[0].shape[2:4] if isinstance(zf, (list, tuple)) else zf.shape[2:4]
+        assert hh == ww
+        offset = (hh / 2.0 - 0.5) * cfg.ANCHORLESS.STRIDE
+        template_box += offset
         # search_box += offset
         #
-        # template_box = torch.split(template_box, 1, dim=0)
+        template_box = torch.split(template_box, 1, dim=0)
         # search_box = torch.split(search_box, 1, dim=0)
 
         # head

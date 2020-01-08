@@ -244,11 +244,9 @@ __C.ANCHOR.ANCHOR_NUM = len(__C.ANCHOR.RATIOS) * len(__C.ANCHOR.SCALES)
 # ------------------------------------------------------------------------ #
 # Anchorless options
 # ------------------------------------------------------------------------ #
-__C.ANCHORLESS = CN()
+__C.RCNN = CN()
 
-__C.ANCHORLESS.STRIDE = 8
-__C.ANCHORLESS.SCALE = 64
-__C.ANCHORLESS.OFFSET = 0.0
+__C.RCNN.NUM_ROI = 8
 
 
 # ------------------------------------------------------------------------ #
