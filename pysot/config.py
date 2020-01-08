@@ -127,7 +127,7 @@ __C.DATASET.NAMES = ('GOT10K', 'VID', 'COCO', 'DET', 'YOUTUBEBB')
 __C.DATASET.GOT10K = CN()
 __C.DATASET.GOT10K.ROOT = '~/dataset/got-10k/crop'
 __C.DATASET.GOT10K.ANNO = '~/dataset/got-10k/crop/train.json'
-__C.DATASET.GOT10K.FRAME_RANGE = 150
+__C.DATASET.GOT10K.FRAME_RANGE = 90
 __C.DATASET.GOT10K.NUM_USE = 100000
 
 __C.DATASET.VID = CN()
@@ -151,8 +151,8 @@ __C.DATASET.COCO.MIN_FRAME_RANGE = 0
 __C.DATASET.COCO.NUM_USE = 100000
 
 __C.DATASET.DET = CN()
-__C.DATASET.DET.ROOT = 'training_dataset/det/crop511'
-__C.DATASET.DET.ANNO = 'training_dataset/det/train.json'
+__C.DATASET.DET.ROOT = '~/dataset/imagenet_det/crop'
+__C.DATASET.DET.ANNO = '~/dataset/imagenet_det/crop/imagenet_det.json'
 __C.DATASET.DET.FRAME_RANGE = 1
 __C.DATASET.DET.NUM_USE = -1
 
@@ -248,7 +248,7 @@ __C.ANCHORLESS = CN()
 
 __C.ANCHORLESS.STRIDE = 8
 __C.ANCHORLESS.SCALE = 64
-__C.ANCHORLESS.OFFSET = 0.5
+__C.ANCHORLESS.OFFSET = 0.0
 
 
 # ------------------------------------------------------------------------ #

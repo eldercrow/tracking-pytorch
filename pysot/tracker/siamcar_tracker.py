@@ -123,7 +123,6 @@ class SiamCARTracker(SiameseTracker):
         pred_bbox = self._convert_bbox(outputs['loc'], self.centers)
         centerness = self._convert_centerness(outputs['ctr'])
 
-        score *= centerness
 
         def change(r):
             return np.maximum(r, 1. / r)
@@ -140,7 +139,7 @@ class SiamCARTracker(SiameseTracker):
         r_c = change((self.size[0]/self.size[1]) /
                      (pred_bbox[2, :]/pred_bbox[3, :]))
         penalty = np.exp(-(r_c * s_c - 1) * cfg.TRACK.PENALTY_K)
-        pscore = penalty * score
+        pscore = penalty * score * centerness
 
         # window penalty
         # pscore *= self.window
@@ -183,5 +182,6 @@ class SiamCARTracker(SiameseTracker):
                 'best_idx': best_idx,
                 'pscore': pscore,
                 'score': score,
+                'centerness': centerness,
                }
 

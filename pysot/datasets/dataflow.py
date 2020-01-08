@@ -99,8 +99,8 @@ class TrainingDataPreprocessor:
         # boxes are in the range of [x0, x1), [y0, y1)
         template_box = template[1] #self._get_bbox(template_image, template[1])
         search_box = search[1] #self._get_bbox(search_image, search[1])
-        self.template_aug.augmentors[1].set_bbox(template_box)
-        self.search_aug.augmentors[1].set_bbox(search_box)
+        self.template_aug.augmentors[0].set_bbox(template_box)
+        self.search_aug.augmentors[0].set_bbox(search_box)
 
         # augmentation
         # random transforms

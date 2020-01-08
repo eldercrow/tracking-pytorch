@@ -30,7 +30,7 @@ def get_bce_loss(pred, label, select):
         return torch.tensor(0)
     pred = torch.index_select(pred, 0, select)
     label = torch.index_select(label, 0, select)
-    return F.binary_cross_entropy(pred, label)
+    return F.binary_cross_entropy_with_logits(pred, label)
 
 
 def weight_l1_loss(pred_loc, label_loc, loss_weight):

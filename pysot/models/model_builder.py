@@ -109,7 +109,7 @@ class ModelBuilder(nn.Module):
         cls12 = self.log_softmax(cls12)
         cls_loss = select_cross_entropy_loss(cls12, label_cls12, label_centerness12)
         loc_loss = weight_l1_loss(loc12, label_loc12, label_loc_weight12)
-        ctr12 = torch.sigmoid(ctr12)
+        # ctr12 = torch.sigmoid(ctr12)
         ctr_loss = select_bce_loss(ctr12, label_centerness12)
 
         # cls21 = self.log_softmax(cls21)
