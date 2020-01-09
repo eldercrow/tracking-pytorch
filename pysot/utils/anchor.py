@@ -12,6 +12,34 @@ import numpy as np
 from pysot.utils.bbox import corner2center, center2corner
 
 
+def generate_anchor(out_shape, scales, ratios, stride):
+    '''
+    '''
+    X, Y = np.meshgrid(np.arange(out_shape),
+                       np.arange(out_shape))
+
+    centers = np.stack([X, Y], axis=0).astype(np.float32)
+    centers += (0.5 - out_shape / 2.0)
+
+    anchors = []
+    for s in scales:
+        for r in ratios:
+            sx2 = s * np.sqrt(r) / 2.0
+            sy2 = s / np.sqrt(r) / 2.0
+
+            x0 = centers[0] - sx2
+            y0 = centers[1] - sy2
+            x1 = centers[0] + sx2
+            y1 = centers[1] + sy2
+
+            anchors.append(np.stack([x0, y0, x1, y1], axis=0))
+    anchors = np.transpose(np.stack(anchors, axis=0), (1, 0, 2, 3))
+
+    centers *= stride
+    anchors *= stride
+    return anchors, centers
+
+
 class Anchors:
     """
     This class generate anchors.

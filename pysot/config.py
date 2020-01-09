@@ -199,6 +199,7 @@ __C.ADJUST = CN()
 
 # Adjust layer
 __C.ADJUST.ADJUST = True
+__C.ADJUST.CROP_SIZE = 7
 
 __C.ADJUST.KWARGS = CN(new_allowed=True)
 
@@ -246,7 +247,11 @@ __C.ANCHOR.ANCHOR_NUM = len(__C.ANCHOR.RATIOS) * len(__C.ANCHOR.SCALES)
 # ------------------------------------------------------------------------ #
 __C.RCNN = CN()
 
+__C.RCNN.TYPE = 'DepthwiseRCNN'
+
 __C.RCNN.NUM_ROI = 8
+
+__C.RCNN.KWARGS = CN(new_allowed=True)
 
 
 # ------------------------------------------------------------------------ #

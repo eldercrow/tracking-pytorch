@@ -11,22 +11,21 @@ import torch.nn.functional as F
 
 from torchvision.ops import roi_align
 
-from pysot.models.head.xcorr import xcorr_fast, xcorr_depthwise #, L1DiffFunction
+from pysot.models.head.xcorr import xcorr_depthwise #, L1DiffFunction
 from pysot.models.init_weight import init_weights
-from pysot.models.head.transformer import Transformer
 
 
-class RPN(nn.Module):
+class RCNN(nn.Module):
     def __init__(self):
-        super(RPN, self).__init__()
+        super(RCNN, self).__init__()
 
     def forward(self, z_f, x_f):
         raise NotImplementedError
 
 
-class DepthwiseRPN(RPN):
-    def __init__(self, num_anchor, in_channels=256, hiddens=256):
-        super(DepthwiseRPN, self).__init__()
+class DepthwiseRCNN(RCNN):
+    def __init__(self, in_channels=256, hiddens=256):
+        super(DepthwiseRCNN, self).__init__()
         self.preproc_z = nn.Sequential(
                 nn.Conv2d(in_channels, in_channels, 3, bias=False, groups=in_channels),
                 nn.BatchNorm2d(in_channels),
@@ -46,11 +45,17 @@ class DepthwiseRPN(RPN):
                 nn.BatchNorm2d(hiddens),
                 nn.ReLU(inplace=True)
                 )
-        self.asp = nn.Sequential(
+        self.cls = nn.Sequential(
                 nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
                 nn.BatchNorm2d(hiddens),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(hiddens, 1, kernel_size=1)
+                nn.Conv2d(hiddens, 2, kernel_size=1)
+                )
+        self.loc = nn.Sequential(
+                nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
+                nn.BatchNorm2d(hiddens),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(hiddens, 4, kernel_size=1)
                 )
         self.ctr = nn.Sequential(
                 nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
@@ -69,6 +74,8 @@ class DepthwiseRPN(RPN):
         feature = xcorr_depthwise(search, kernel)
         feature = self.head(feature)
 
+        cls = self.cls(feature)
+        loc = self.loc(feature)
         ctr = self.ctr(feature)
-        asp = self.asp(feature)
-        return ctr, asp
+        return cls, loc, ctr
+

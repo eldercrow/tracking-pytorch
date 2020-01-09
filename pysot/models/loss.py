@@ -34,11 +34,23 @@ def get_bce_loss(pred, label, select):
 
 
 def weight_l1_loss(pred_loc, label_loc, loss_weight):
-    b, _, sh, sw = pred_loc.size()
-    # pred_loc = pred_loc.view(b, 4, -1, sh, sw)
+    b = pred_loc.shape[0]
+    pred_loc = pred_loc.view(-1, 4)
+    label_loc = label_loc.view(-1, 4)
+    loss_weight = loss_weight.view(-1)
+    # b, _, sh, sw = pred_loc.size()
+    # # pred_loc = pred_loc.view(b, 4, -1, sh, sw)
     diff = (pred_loc - label_loc).abs()
     diff = diff.sum(dim=1)
     loss = diff * loss_weight
+    return loss.sum().div(b)
+
+
+def weight_asp_loss(pred_asp, label_asp, loss_weight):
+    b = pred_asp.shape[0]
+    label_asp = label_asp.view(-1, 1, 1, 1)
+    diff = (pred_asp - label_asp).abs()
+    loss = diff.view(-1) * loss_weight.view(-1)
     return loss.sum().div(b)
 
 
@@ -48,7 +60,7 @@ def select_cross_entropy_loss(pred, label, weight):
     weight = weight.view(-1)
     pos = label.data.eq(1).nonzero().squeeze().cuda()
     neg = label.data.eq(0).nonzero().squeeze().cuda()
-    loss_pos = get_cls_loss(pred, label, pos, weight)
+    loss_pos = get_cls_loss(pred, label, pos)
     loss_neg = get_cls_loss(pred, label, neg)
     return loss_pos * 0.5 + loss_neg * 0.5
 

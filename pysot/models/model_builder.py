@@ -9,12 +9,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# from torchvision.ops import RoIAlign
+from torchvision.ops import RoIAlign, nms
 
 from pysot.config import cfg
-from pysot.models.loss import select_cross_entropy_loss, weight_l1_loss, select_bce_loss
+from pysot.models.loss import weight_asp_loss, select_bce_loss
 from pysot.models.backbone import get_backbone
-from pysot.models.head import get_rpn_head
+from pysot.models.head import get_rpn_head, get_rcnn_head
 from pysot.models.neck import get_neck
 from pysot.models.non_local import get_nonlocal
 
@@ -32,35 +32,103 @@ class ModelBuilder(nn.Module):
                              **cfg.ADJUST.KWARGS)
 
         # roi align for cropping center
-        # self.roi_align = RoIAlign((7, 7), 1.0 / cfg.ANCHOR.STRIDE, 1)
+        self.roi_align = RoIAlign((7, 7), 1.0 / cfg.ANCHOR.STRIDE, 1)
 
         # build rpn head
         self.rpn_head = get_rpn_head(cfg.RPN.TYPE,
                                      **cfg.RPN.KWARGS)
 
-    def template(self, z):
+        # build rcnn head
+        # self.rcnn_head = get_rcnn_head(cfg.RCNN.TYPE,
+        #                                **cfg.RCNN.KWARGS)
+
+    def template(self, z, roi_centered):
         zf = self.backbone(z)
         zf = self.neck(zf)
+        # rcnn
+        self.zf_crop = self.crop_align_feature(zf, torch.Tensor(roi_centered).cuda())
+        # rpn
+        l = (zf.shape[-1] - cfg.ADJUST.CROP_SIZE) // 2
+        r = l + cfg.ADJUST.CROP_SIZE
+        zf = zf[:, :, l:r, l:r]
         self.zf = zf
 
-    def track(self, x):
+    def track(self, x, anchors):
+        '''
+        anchors: [num_anchor, 4]
+        '''
         xf = self.backbone(x)
         xf = self.neck(xf)
-        cls, loc, ctr = self.rpn_head(self.zf, xf)
+
+        # rpn
+        cls_rpn, ctr_rpn = self.rpn_head(self.zf, xf)
+        # get max scores
+        cls_rpn = self.log_softmax(cls_rpn)
+        ctr_rpn = self.log_sigmoid(ctr_rpn)
+        shape_ctr = ctr_rpn.shape
+        ctr_rpn = ctr_rpn.view(*([shape_ctr[0], 1] + [s for s in shape_ctr[1:]]))
+        score_rpn = cls_rpn[:, :] + ctr_rpn.expand_as(cls_rpn)
+        score_rpn = score_rpn[:, :, :, :, 1].contiguous()
+
+        Nb = xf.shape[0]
+        score_rpn = score_rpn.view(Nb, -1)
+
+        # nms
+        anchors = torch.Tensor(anchors).cuda()
+        rois = []
+        for score in score_rpn:
+            keep = nms(anchors, score, 0.6667)[:cfg.RCNN.NUM_ROI]
+            rois.append(torch.index_select(anchors, 0, keep))
+        rois = torch.stack(rois, 0)
+
+        # rcnn
+        zf_crop = torch.repeat_interleave(self.zf_crop, cfg.RCNN.NUM_ROI, dim=0)
+        xf_crop = self.crop_align_feature(xf, rois)
+        cls_rcnn, loc_rcnn, ctr_rcnn = self.rcnn_head(zf_crop, xf_crop)
+
         return {
-                'cls': cls,
-                'loc': loc,
-                'ctr': ctr,
+                'cls': cls_rcnn,
+                'loc': loc_rcnn,
+                'ctr': ctr_rcnn,
+                'roi': rois,
+                'cls_rpn': cls_rpn,
+                'ctr_rpn': ctr_rpn
                }
 
+    def crop_align_feature(self, feat, roi):
+        '''
+        rois are assumed to be centered
+        '''
+        # rois are assumed to be centered, move it back.
+        hh, ww = feat.shape[2:4]
+        assert hh == ww
+        offset = (hh / 2.0 - 0.5) * cfg.ANCHOR.STRIDE
+        roi += offset
+
+        roi = tuple([r.view(-1, 4) for r in roi])
+        if isinstance(feat, (list, tuple)):
+            cropped = [self.roi_align(f, roi) for f in feat]
+        else:
+            cropped = self.roi_align(feat, roi)
+        return cropped
+
     def log_softmax(self, cls):
-        cls = cls.permute(0, 2, 3, 1).contiguous()
-        cls = F.log_softmax(cls, dim=3)
-        # b, a2, h, w = cls.size()
-        # cls = cls.view(b, 2, a2//2, h, w)
-        # cls = cls.permute(0, 2, 3, 4, 1).contiguous()
-        # cls = F.log_softmax(cls, dim=4)
+        b, a2, h, w = cls.size()
+        if a2 == 2:
+            cls = cls.permute(0, 2, 3, 1).contiguous()
+            cls = F.log_softmax(cls, dim=3)
+        else:
+            cls = cls.view(b, a2//2, 2, h, w)
+            cls = cls.permute(0, 1, 3, 4, 2).contiguous()
+            cls = F.log_softmax(cls, dim=4)
         return cls
+
+    def log_sigmoid(self, ctr):
+        '''
+        stupid!
+        '''
+        ctr = ctr.permute(0, 2, 3, 1).contiguous()
+        return ctr - torch.log1p(torch.exp(ctr))
 
     def forward(self, data):
         """ only used in training
@@ -71,60 +139,34 @@ class ModelBuilder(nn.Module):
         search_box = data['search_box'].cuda()
 
         # 12: from template to search
-        label_cls = data['label_cls'].cuda()
-        label_centerness = data['label_ctr'].cuda()
-
-        anchor_2nd = data['anchor_2nd'].cuda()
-        label_iou_2nd = data['label_iou_2nd'].cuda()
-        label_ctr_2nd = data['label_ctr_2nd'].cuda()
-        label_delta_2nd = data['label_delta_2nd'].cuda()
-        label_delta_w_2nd = data['label_delta_w_2nd'].cuda()
+        label_ctr_rpn = data['label_ctr_rpn'].cuda()
+        label_aspect_rpn = data['label_aspect_rpn'].cuda()
+        label_aspect_w_rpn = data['label_aspect_w_rpn'].cuda()
 
         # get feature
         zf = self.backbone(template)
         xf = self.backbone(search)
-        # neck
+
+        # neck with concat
         zf = self.neck(zf)
         xf = self.neck(xf)
 
-        # crop
-        # first adjust coordinate
-        hh, ww = zf[0].shape[2:4] if isinstance(zf, (list, tuple)) else zf.shape[2:4]
-        assert hh == ww
-        offset = (hh / 2.0 - 0.5) * cfg.ANCHORLESS.STRIDE
-        template_box += offset
-        # search_box += offset
-        #
-        template_box = torch.split(template_box, 1, dim=0)
-        # search_box = torch.split(search_box, 1, dim=0)
+        # for rcnn
+        zf_crop = self.crop_align_feature(zf, template_box) # (Nb, ch, 7, 7)
 
-        # head
-        cls12, loc12, ctr12 = self.rpn_head(zf, xf)
-        # cls21, loc21, ctr21 = self.rpn_head(xf_crop, zf)
+        # rpn head
+        ctr_rpn, aspect_rpn = self.rpn_head(zf_crop, xf)
 
         # get loss
-        cls12 = self.log_softmax(cls12)
-        cls_loss = select_cross_entropy_loss(cls12, label_cls12, label_centerness12)
-        loc_loss = weight_l1_loss(loc12, label_loc12, label_loc_weight12)
-        # ctr12 = torch.sigmoid(ctr12)
-        ctr_loss = select_bce_loss(ctr12, label_centerness12)
-
-        # cls21 = self.log_softmax(cls21)
-        # cls_loss21 = select_cross_entropy_loss(cls21, label_cls21, label_centerness21)
-        # loc_loss21 = weight_l1_loss(loc21, label_loc21, label_loc_weight21)
-        # ctr21 = torch.sigmoid(ctr21)
-        # ctr_loss21 = select_bce_loss(ctr21, label_centerness12)
-
-        # cls_loss = 0.5 * (cls_loss12 + cls_loss21)
-        # loc_loss = 0.5 * (loc_loss12 + loc_loss21)
-        # ctr_loss = 0.5 * (ctr_loss12 + ctr_loss21)
+        ctr_rpn_loss = select_bce_loss(ctr_rpn, label_ctr_rpn)
+        aspect_rpn_loss = weight_asp_loss(aspect_rpn, label_aspect_rpn, label_aspect_w_rpn)
 
         outputs = {}
-        outputs['total_loss'] = cfg.TRAIN.CLS_WEIGHT * cls_loss + \
-            cfg.TRAIN.LOC_WEIGHT * loc_loss + \
-            cfg.TRAIN.CTR_WEIGHT * ctr_loss
-        outputs['cls_loss'] = cls_loss
-        outputs['loc_loss'] = loc_loss
-        outputs['ctr_loss'] = ctr_loss
+        outputs['total_loss'] = \
+            cfg.TRAIN.CTR_WEIGHT * ctr_rpn_loss + \
+            cfg.TRAIN.LOC_WEIGHT * aspect_rpn_loss
+        outputs['ctr_rpn_loss'] = ctr_rpn_loss
+        outputs['aspect_rpn_loss'] = aspect_rpn_loss
+        
         # done
         return outputs
