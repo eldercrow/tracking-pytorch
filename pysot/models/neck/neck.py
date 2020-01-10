@@ -18,6 +18,7 @@ class AdjustLayer(nn.Module):
             nn.ReLU(inplace=True),
             )
         self.center_size = center_size
+        self.out_channels = out_channels
 
     def forward(self, x):
         if isinstance(x, (list, tuple)):
@@ -45,6 +46,7 @@ class AdjustAllLayer(nn.Module):
                                 AdjustLayer(in_channels[i],
                                             out_channels[i],
                                             center_size))
+        self.out_channels = sum(out_channels)
 
     def forward(self, features):
         if self.num == 1:

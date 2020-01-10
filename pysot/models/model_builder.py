@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torchvision.ops import RoIAlign, nms
+from torchvision.ops import RoIAlign, nms, roi_align
 
 from pysot.config import cfg
 from pysot.models.loss import weight_asp_loss, select_bce_loss
@@ -17,6 +17,7 @@ from pysot.models.backbone import get_backbone
 from pysot.models.head import get_rpn_head, get_rcnn_head
 from pysot.models.neck import get_neck
 from pysot.models.non_local import get_nonlocal
+from pysot.models.backbone import mobilenet_v2_rcnn
 
 
 class ModelBuilder(nn.Module):
@@ -32,11 +33,24 @@ class ModelBuilder(nn.Module):
                              **cfg.ADJUST.KWARGS)
 
         # roi align for cropping center
-        self.roi_align = RoIAlign((7, 7), 1.0 / cfg.ANCHOR.STRIDE, 1)
+        # self.roi_align = RoIAlign((7, 7), 1.0 / cfg.ANCHOR.STRIDE, 1)
+        # self.roi_align_rcnn = RoIAlign((13, 13), 1.0 / cfg.ANCHOR.STRIDE, 1)
 
         # build rpn head
         self.rpn_head = get_rpn_head(cfg.RPN.TYPE,
                                      **cfg.RPN.KWARGS)
+
+        rcnn_backbone = mobilenet_v2_rcnn(**cfg.BACKBONE.KWARGS)
+        rcnn_pre_backbone = nn.Sequential( \
+                nn.Conv2d(self.neck.out_channels, rcnn_backbone.in_channels, 1, bias=False), \
+                nn.BatchNorm2d(rcnn_backbone.in_channels)
+                )
+        rcnn_post_backbone = nn.Sequential( \
+                nn.Conv2d(320, cfg.RCNN.KWARGS['in_channels'], 1, bias=False), \
+                nn.BatchNorm2d(cfg.RCNN.KWARGS['in_channels']), \
+                nn.ReLU(inplace=True)
+                )
+        self.rcnn_backbone = nn.Sequential(rcnn_pre_backbone, rcnn_backbone, rcnn_post_backbone)
 
         # build rcnn head
         self.rcnn_head = get_rcnn_head(cfg.RCNN.TYPE,
@@ -93,7 +107,7 @@ class ModelBuilder(nn.Module):
                 'asp_rpn': asp_rpn
                }
 
-    def crop_align_feature(self, feat, roi):
+    def crop_align_feature(self, feat, roi, out_shape):
         '''
         rois are assumed to be centered
         '''
@@ -103,11 +117,12 @@ class ModelBuilder(nn.Module):
         offset = (hh / 2.0 - 0.5) * cfg.ANCHOR.STRIDE
         roi += offset
 
+        scale = 1.0 / cfg.ANCHOR.STRIDE
         roi = tuple([r.view(-1, 4) for r in roi])
         if isinstance(feat, (list, tuple)):
-            cropped = [self.roi_align(f, roi) for f in feat]
+            cropped = [roi_align(f, roi, out_shape, scale, 1) for f in feat]
         else:
-            cropped = self.roi_align(feat, roi)
+            cropped = roi_align(feat, roi, out_shape, scale, 1)
         return cropped
 
     # def log_softmax(self, cls):
@@ -153,20 +168,26 @@ class ModelBuilder(nn.Module):
         # neck with concat
         zf = self.neck(zf)
         xf = self.neck(xf)
-        zf_crop = self.crop_align_feature(zf, template_box) # (Nb, ch, 7, 7)
+        zf_crop = self.crop_align_feature(zf, template_box, (7, 7)) # (Nb, ch, 7, 7)
 
         # rpn head
         ctr_rpn, aspect_rpn = self.rpn_head(zf_crop, xf)
 
         # rcnn
-        xf_crop = self.crop_align_feature(xf, anchors_rcnn)
-        num_roi = xf_crop.shape[0] // zf_crop.shape[0]
-        zf_crop = torch.repeat_interleave(zf_crop, num_roi, dim=0)
+        zf_crop_rcnn = self.crop_align_feature(zf, template_box, (15, 15))
+        xf_crop_rcnn = self.crop_align_feature(xf, anchors_rcnn, (15, 15))
+
+        zf_crop_rcnn = self.rcnn_backbone(zf_crop_rcnn)
+        xf_crop_rcnn = self.rcnn_backbone(xf_crop_rcnn)
+
+        # duplicate zf for cross correlation
+        num_roi = xf_crop_rcnn.shape[0] // zf_crop_rcnn.shape[0]
+        zf_crop_rcnn = torch.repeat_interleave(zf_crop_rcnn, num_roi, dim=0)
 
         # [Nb*num_roi, 1, 1, 1]
         # [Nb*num_roi, 1, 1, 1]
         # [Nb*num_roi, 4, 1, 1]
-        ctr_rcnn, iou_rcnn, loc_rcnn = self.rcnn_head(zf_crop, xf_crop)
+        ctr_rcnn, iou_rcnn, loc_rcnn = self.rcnn_head(zf_crop_rcnn, xf_crop_rcnn)
 
         # get loss
         ctr_rpn_loss = select_bce_loss(ctr_rpn, label_ctr_rpn)

@@ -6,7 +6,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from pysot.models.backbone.resnet import resnet18, resnet34, resnet50
-from pysot.models.backbone.mobilenetv2 import mobilenet_v2
+from pysot.models.backbone.mobilenetv2 import mobilenet_v2, mobilenet_v2_rcnn
 
 BACKBONES = {
               'resnet18': resnet18,
