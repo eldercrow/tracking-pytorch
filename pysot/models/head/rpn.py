@@ -50,13 +50,13 @@ class DepthwiseRPN(RPN):
                 nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
                 nn.BatchNorm2d(hiddens),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(hiddens, 1, kernel_size=1)
+                nn.Conv2d(hiddens, 1, kernel_size=1, bias=True)
                 )
         self.ctr = nn.Sequential(
                 nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
                 nn.BatchNorm2d(hiddens),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(hiddens, 1, kernel_size=1)
+                nn.Conv2d(hiddens, 1, kernel_size=1, bias=True)
                 )
 
     def forward(self, z_f, x_f):

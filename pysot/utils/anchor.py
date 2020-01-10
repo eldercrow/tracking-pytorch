@@ -14,30 +14,44 @@ from pysot.utils.bbox import corner2center, center2corner
 
 def generate_anchor(out_shape, scales, ratios, stride):
     '''
+    return:
+        anchors: [4, s*r, out_shape, out_shape], or
+                 [4, out_shape, out_shape] if s*r is 1.
+        anchors_cwh: [4, s*r, out_shape, out_shape], or
+                     [4, out_shape, out_shape] if s*r is 1.
+        centers: [2, out_shape, out_shape]
     '''
     X, Y = np.meshgrid(np.arange(out_shape),
                        np.arange(out_shape))
 
     centers = np.stack([X, Y], axis=0).astype(np.float32)
     centers += (0.5 - out_shape / 2.0)
+    cx, cy = centers[0], centers[1]
+    twos = np.ones_like(cx) * 2.0
 
     anchors = []
+    anchors_cwh = []
     for s in scales:
         for r in ratios:
             sx2 = s * np.sqrt(r) / 2.0
             sy2 = s / np.sqrt(r) / 2.0
 
-            x0 = centers[0] - sx2
-            y0 = centers[1] - sy2
-            x1 = centers[0] + sx2
-            y1 = centers[1] + sy2
+            x0 = cx - sx2
+            y0 = cy - sy2
+            x1 = cx + sx2
+            y1 = cy + sy2
 
             anchors.append(np.stack([x0, y0, x1, y1], axis=0))
+            anchors_cwh.append(np.stack([cx, cy, sx2*twos, sy2*twos], axis=0))
     anchors = np.transpose(np.stack(anchors, axis=0), (1, 0, 2, 3))
+    anchors = np.squeeze(anchors)
+    anchors_cwh = np.transpose(np.stack(anchors_cwh, axis=0), (1, 0, 2, 3))
+    anchors_cwh = np.squeeze(anchors_cwh)
 
-    centers *= stride
+    # centers *= stride
     anchors *= stride
-    return anchors, centers
+    anchors_cwh *= stride
+    return anchors, anchors_cwh #, centers
 
 
 class Anchors:

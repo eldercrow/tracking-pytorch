@@ -32,35 +32,39 @@ class SiamCARTracker(SiameseTracker):
         self.model = model
         self.model.eval()
 
-    def _convert_bbox(self, delta, anchor):
-        '''
-        delta: [Nb*num_roi, 4, 1, 1]
-        both delta and anchor should be [N, 4]
-        '''
-        anchor = anchor.view(-1, 4).data.cpu().numpy()
-        ax = (anchor[:, 0] + anchor[:, 2]) * 0.5
-        ay = (anchor[:, 1] + anchor[:, 3]) * 0.5
-        aw = anchor[:, 2] - anchor[:, 0]
-        ah = anchor[:, 3] - anchor[:, 1]
+    # def _convert_bbox(self, delta, anchor):
+    #     '''
+    #     delta: [Nb*num_roi, 4, 1, 1]
+    #     both delta and anchor should be [N, 4]
+    #     '''
+    #     anchor = anchor.view(-1, 4).data.cpu().numpy()
+    #     ax = (anchor[:, 0] + anchor[:, 2]) * 0.5
+    #     ay = (anchor[:, 1] + anchor[:, 3]) * 0.5
+    #     aw = anchor[:, 2] - anchor[:, 0]
+    #     ah = anchor[:, 3] - anchor[:, 1]
 
-        delta = delta.view(-1, 4).data.cpu().numpy()
-        delta[:, 0] = delta[:, 0] * aw + ax
-        delta[:, 1] = delta[:, 1] * ah + ay
-        delta[:, 2] = np.exp(delta[:, 2]) * aw
-        delta[:, 3] = np.exp(delta[:, 3]) * ah
-        return delta
+    #     delta = delta.view(-1, 4).data.cpu().numpy()
+    #     delta[:, 0] = delta[:, 0] * aw + ax
+    #     delta[:, 1] = delta[:, 1] * ah + ay
+    #     delta[:, 2] = np.exp(delta[:, 2]) * aw
+    #     delta[:, 3] = np.exp(delta[:, 3]) * ah
+    #     return delta
 
-    def _convert_score(self, score):
-        '''
-        score: [Nb*num_roi, 2, 1, 1]
-        '''
-        score = score.view(-1, 2)
-        score = F.softmax(score, dim=1).data[:, 1].cpu().numpy()
-        return score
+    # def _convert_score(self, score):
+    #     '''
+    #     score: [Nb*num_roi, 2, 1, 1]
+    #     '''
+    #     score = score.view(-1, 2)
+    #     score = F.softmax(score, dim=1).data[:, 1].cpu().numpy()
+    #     return score
 
     def _convert_centerness(self, ctr):
         ctr = torch.sigmoid(ctr.view(-1)).data.cpu().numpy()
         return ctr
+
+    def _convert_aspect(self, aspect):
+        asp = aspect.data.cpu().numpy()
+        return asp
 
     def _bbox_clip(self, cx, cy, width, height, boundary):
         cx = max(0, min(cx, boundary[1]))
@@ -102,7 +106,7 @@ class SiamCARTracker(SiameseTracker):
         self.model.template(z_crop, roi_centered)
         self.roi_centered = roi_centered
         zf = self.model.zf
-        zf_crop = self.model.zf_crop
+        # zf_crop = self.model.zf_crop
 
     def track(self, img):
         """
@@ -124,7 +128,12 @@ class SiamCARTracker(SiameseTracker):
         # 'loc': loc,
         # 'xf': xf,
         # 'mask': mask if cfg.MASK.MASK else None
-        outputs = self.model.track(x_crop, self.anchors)
+        outputs = self.model.track(x_crop)
+
+        ctr = self._convert_centerness(outputs['ctr_rpn'])
+        asp = self._convert_aspect(outputs['asp_rpn'])
+
+        return {'ctr_rpn': ctr, 'asp_rpn': asp}
 
         score = self._convert_score(outputs['cls'])
         pred_bbox = self._convert_bbox(outputs['loc'], outputs['roi'])

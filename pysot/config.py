@@ -33,6 +33,8 @@ __C.TRAIN.POS_NUM = 16
 # Number of anchors per images
 __C.TRAIN.TOTAL_NUM = 64
 
+__C.TRAIN.NUM_ROI = 32
+
 __C.TRAIN.EXEMPLAR_SIZE = 127
 __C.TRAIN.SEARCH_SIZE = 255
 __C.TRAIN.BASE_SIZE = 8

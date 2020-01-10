@@ -24,7 +24,7 @@ class RCNN(nn.Module):
 
 
 class DepthwiseRCNN(RCNN):
-    def __init__(self, in_channels=256, hiddens=256):
+    def __init__(self, in_channels=256, hiddens=256, fc=1024):
         super(DepthwiseRCNN, self).__init__()
         self.preproc_z = nn.Sequential(
                 nn.Conv2d(in_channels, in_channels, 3, bias=False, groups=in_channels),
@@ -41,27 +41,33 @@ class DepthwiseRCNN(RCNN):
                 nn.ReLU(inplace=True)
                 )
         self.head = nn.Sequential(
-                nn.Conv2d(in_channels, hiddens, kernel_size=1, bias=False),
-                nn.BatchNorm2d(hiddens),
-                nn.ReLU(inplace=True)
-                )
-        self.cls = nn.Sequential(
-                nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
+                nn.Conv2d(in_channels, fc, kernel_size=1, bias=False),
+                nn.BatchNorm2d(fc),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(fc, fc, kernel_size=1, bias=False),
+                nn.BatchNorm2d(fc),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(fc, hiddens, kernel_size=1, bias=False),
                 nn.BatchNorm2d(hiddens),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(hiddens, 2, kernel_size=1)
-                )
-        self.loc = nn.Sequential(
-                nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
-                nn.BatchNorm2d(hiddens),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(hiddens, 4, kernel_size=1)
                 )
         self.ctr = nn.Sequential(
                 nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
                 nn.BatchNorm2d(hiddens),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(hiddens, 1, kernel_size=1)
+                )
+        self.iou = nn.Sequential(
+                nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
+                nn.BatchNorm2d(hiddens),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(hiddens, 1, kernel_size=1)
+                )
+        self.loc = nn.Sequential(
+                nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
+                nn.BatchNorm2d(hiddens),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(hiddens, 4, kernel_size=1)
                 )
 
     def forward(self, z_f, x_f):
@@ -74,8 +80,8 @@ class DepthwiseRCNN(RCNN):
         feature = xcorr_depthwise(search, kernel)
         feature = self.head(feature)
 
-        cls = self.cls(feature)
-        loc = self.loc(feature)
         ctr = self.ctr(feature)
-        return cls, loc, ctr
+        iou = self.iou(feature)
+        loc = self.loc(feature)
+        return ctr, iou, loc
 
