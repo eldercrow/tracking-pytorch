@@ -105,7 +105,9 @@ venv.bak/
 .mypy_cache/
 
 testing_dataset/*
-experiments
+snapshot/
+logs/
+results/
 
 pretrained_models/*
-result_images/*
+result_images/

@@ -23,32 +23,32 @@ class SiamCARTracker(SiameseTracker):
         hanning = np.hanning(self.score_size)
         window = np.outer(hanning, hanning)
         self.window = window.flatten()
-        self.anchors, self.centers = generate_anchor(self.score_size, \
-                                                     cfg.ANCHOR.SCALES, \
-                                                     cfg.ANCHOR.RATIOS, \
-                                                     cfg.ANCHOR.STRIDE)
-        self.anchors = np.transpose(np.reshape(self.anchors, (4, -1)), (1, 0))
+        anchors, anchors_cwh = generate_anchor(self.score_size, \
+                                               cfg.ANCHOR.SCALES, \
+                                               cfg.ANCHOR.RATIOS, \
+                                               cfg.ANCHOR.STRIDE)
 
+        self.anchors_cwh = torch.Tensor(np.expand_dims(anchors_cwh, 0)).cuda()
         self.model = model
         self.model.eval()
 
-    # def _convert_bbox(self, delta, anchor):
-    #     '''
-    #     delta: [Nb*num_roi, 4, 1, 1]
-    #     both delta and anchor should be [N, 4]
-    #     '''
-    #     anchor = anchor.view(-1, 4).data.cpu().numpy()
-    #     ax = (anchor[:, 0] + anchor[:, 2]) * 0.5
-    #     ay = (anchor[:, 1] + anchor[:, 3]) * 0.5
-    #     aw = anchor[:, 2] - anchor[:, 0]
-    #     ah = anchor[:, 3] - anchor[:, 1]
+    def _convert_bbox(self, delta, roi):
+        '''
+        delta: [Nb*num_roi, 4, 1, 1]
+        both delta and anchor should be [N, 4]
+        '''
+        roi = roi.view(-1, 4).data.cpu().numpy()
+        ax = (roi[:, 0] + roi[:, 2]) * 0.5
+        ay = (roi[:, 1] + roi[:, 3]) * 0.5
+        aw = roi[:, 2] - roi[:, 0]
+        ah = roi[:, 3] - roi[:, 1]
 
-    #     delta = delta.view(-1, 4).data.cpu().numpy()
-    #     delta[:, 0] = delta[:, 0] * aw + ax
-    #     delta[:, 1] = delta[:, 1] * ah + ay
-    #     delta[:, 2] = np.exp(delta[:, 2]) * aw
-    #     delta[:, 3] = np.exp(delta[:, 3]) * ah
-    #     return delta
+        delta = delta.view(-1, 4).data.cpu().numpy()
+        delta[:, 0] = ax - delta[:, 0] * aw
+        delta[:, 1] = ay - delta[:, 1] * ah
+        delta[:, 2] = ax + delta[:, 2] * aw
+        delta[:, 3] = ay + delta[:, 3] * ah
+        return delta
 
     # def _convert_score(self, score):
     #     '''
@@ -105,7 +105,9 @@ class SiamCARTracker(SiameseTracker):
 
         self.model.template(z_crop, roi_centered)
         self.roi_centered = roi_centered
-        zf = self.model.zf
+
+        # zf_rpn = self.model.zf_rpn
+        # zf_rcnn = self.model.zf_rcnn
         # zf_crop = self.model.zf_crop
 
     def track(self, img):
@@ -128,16 +130,18 @@ class SiamCARTracker(SiameseTracker):
         # 'loc': loc,
         # 'xf': xf,
         # 'mask': mask if cfg.MASK.MASK else None
-        outputs = self.model.track(x_crop)
+        outputs = self.model.track(x_crop, self.anchors_cwh)
 
-        ctr = self._convert_centerness(outputs['ctr_rpn'])
-        asp = self._convert_aspect(outputs['asp_rpn'])
+        ctr_rpn = self._convert_centerness(outputs['ctr_rpn'])
+        asp_rpn = self._convert_aspect(outputs['asp_rpn'])
 
-        return {'ctr_rpn': ctr, 'asp_rpn': asp}
+        ctr = self._convert_centerness(outputs['ctr_rcnn'])
+        iou = self._convert_centerness(outputs['iou_rcnn'])
+        score = ctr * iou
 
-        score = self._convert_score(outputs['cls'])
-        pred_bbox = self._convert_bbox(outputs['loc'], outputs['roi'])
-        centerness = self._convert_centerness(outputs['ctr'])
+        import ipdb
+        ipdb.set_trace()
+        pred_bbox = self._convert_bbox(outputs['loc_rcnn'], outputs['roi_rcnn'])
 
         def change(r):
             return np.maximum(r, 1. / r)
@@ -154,9 +158,7 @@ class SiamCARTracker(SiameseTracker):
         r_c = change((self.size[0]/self.size[1]) /
                      (pred_bbox[:, 2]/pred_bbox[:, 3]))
         penalty = np.exp(-(r_c * s_c - 1) * cfg.TRACK.PENALTY_K)
-        import ipdb
-        ipdb.set_trace()
-        pscore = penalty * score * centerness
+        pscore = penalty * score
 
         # window penalty
         # pscore *= self.window
@@ -199,8 +201,10 @@ class SiamCARTracker(SiameseTracker):
                 'best_idx': best_idx,
                 'pscore': pscore,
                 'score': score,
-                'centerness': centerness,
-                'cls_rpn': outputs['cls_rpn'].data.cpu().numpy(),
-                'ctr_rpn': outputs['ctr_rpn'].data.cpu().numpy()
+                'ctr_rcnn': ctr,
+                'iou_rcnn': iou,
+                'pred_bbox': pred_bbox,
+                'ctr_rpn': ctr_rpn,
+                'asp_rpn': asp_rpn
                }
 

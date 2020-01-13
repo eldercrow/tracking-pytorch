@@ -19,7 +19,7 @@ class AnchorTarget:
                                                          cfg.ANCHOR.RATIOS, \
                                                          cfg.ANCHOR.STRIDE)
 
-    def __call__(self, target, sz_img, is_neg=False):
+    def __call__(self, target_c, is_neg=False):
         '''
         target: (x0, y0, x1, y1), roi
         '''
@@ -29,7 +29,7 @@ class AnchorTarget:
 
         # -1 ignore 0 negative 1 positive
         # cls_rpn = -1 * np.ones((anchor_num, sz_anc, sz_anc), dtype=np.int64)
-        asp = (target[2] - target[0]) / (target[3] - target[1])
+        asp = (target_c[2] - target_c[0]) / (target_c[3] - target_c[1])
         aspect_rpn = np.log(asp).astype(np.float32)
         aspect_w_rpn = np.zeros((sz_anc, sz_anc), dtype=np.float32)
 
@@ -53,9 +53,6 @@ class AnchorTarget:
             slt = slt[:keep_num]
             return tuple(p[slt] for p in position), keep_num
 
-        # centering target
-        target_c = target - sz_img / 2.0
-
         # ctr_rpn
         x0, y0, x1, y1 = target_c
         delta = np.stack([self.anchors_cwh[0] - x0, \
@@ -77,20 +74,19 @@ class AnchorTarget:
         pos_all = np.where(pos_mask == True)
         neg_all = np.where(pos_mask == False)
 
+        pos_2nd, _ = select(pos_all, cfg.TRAIN.NUM_ROI, True)
+        neg_2nd, _ = select(neg_all, cfg.TRAIN.NUM_ROI, True)
+
         pos, _ = select(pos_all, cfg.TRAIN.POS_NUM)
         neg, _ = select(neg_all, cfg.TRAIN.TOTAL_NUM - cfg.TRAIN.POS_NUM)
-
-        pos_2nd, _ = select(pos, cfg.TRAIN.NUM_ROI, True)
-        neg_2nd, _ = select(neg, cfg.TRAIN.NUM_ROI, True)
 
         # (4, NUM_ROI*2)
         pn_2nd = tuple([np.hstack([p, n]) for p, n in zip(pos_2nd, neg_2nd)])
         anchors_cwh_2nd = np.stack([self.anchors_cwh[i][pn_2nd] for i in range(4)], axis=0)
-        anchors_cwh_2nd = np.stack([self.anchors_cwh[i][pn_2nd] for i in range(4)], axis=0)
         num_roi = pn_2nd[0].size
 
         # randomness to anchors_2nd
-        asp2 = np.sqrt(np.exp(aspect_rpn + np.random.uniform(-0.5, 0.5, num_roi)))
+        asp2 = np.sqrt(np.exp(aspect_rpn + np.clip(np.random.normal(0.0, 0.333, num_roi), -1.0, 1.0)))
         anchors_cwh_2nd = np.stack([ \
                 anchors_cwh_2nd[0], \
                 anchors_cwh_2nd[1], \

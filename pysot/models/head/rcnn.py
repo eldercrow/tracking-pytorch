@@ -24,24 +24,20 @@ class RCNN(nn.Module):
 
 
 class DepthwiseRCNN(RCNN):
-    def __init__(self, in_channels=256, hiddens=256):
+    def __init__(self, in_channels=256, preproc_channels=256, hiddens=256):
         super(DepthwiseRCNN, self).__init__()
-        # self.preproc_z = nn.Sequential(
-        #         nn.Conv2d(in_channels, in_channels, 3, bias=False, groups=in_channels),
-        #         nn.BatchNorm2d(in_channels),
-        #         nn.Conv2d(in_channels, in_channels, 1, bias=False),
-        #         nn.BatchNorm2d(in_channels),
-        #         nn.ReLU(inplace=True)
-        #         )
-        # self.preproc_x = nn.Sequential(
-        #         nn.Conv2d(in_channels, in_channels, 3, bias=False, groups=in_channels),
-        #         nn.BatchNorm2d(in_channels),
-        #         nn.Conv2d(in_channels, in_channels, 1, bias=False),
-        #         nn.BatchNorm2d(in_channels),
-        #         nn.ReLU(inplace=True)
-        #         )
+        self.preproc_z = nn.Sequential(
+                nn.Conv2d(in_channels, preproc_channels, 1, bias=False),
+                nn.BatchNorm2d(preproc_channels),
+                nn.ReLU(inplace=True)
+                )
+        self.preproc_x = nn.Sequential(
+                nn.Conv2d(in_channels, preproc_channels, 1, bias=False),
+                nn.BatchNorm2d(preproc_channels),
+                nn.ReLU(inplace=True)
+                )
         self.head = nn.Sequential(
-                nn.Conv2d(in_channels, hiddens, kernel_size=1, bias=False),
+                nn.Conv2d(preproc_channels, hiddens, kernel_size=1, bias=False),
                 nn.BatchNorm2d(hiddens),
                 nn.ReLU(inplace=True),
                 )
@@ -69,9 +65,9 @@ class DepthwiseRCNN(RCNN):
             z_f = torch.cat(z_f, dim=1)
             x_f = torch.cat(x_f, dim=1)
 
-        # search = self.preproc_x(x_f)
-        # kernel = self.preproc_z(z_f)
-        feature = xcorr_depthwise(x_f, z_f)
+        search = self.preproc_x(x_f)
+        kernel = self.preproc_z(z_f)
+        feature = xcorr_depthwise(search, kernel)
         feature = self.head(feature)
 
         ctr = self.ctr(feature)

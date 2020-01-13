@@ -126,10 +126,11 @@ class TrainingDataPreprocessor:
         points = tfms_s.apply_coords(points)
         search_box = point8_to_box(points)
 
-        ctr_rpn, aspect_rpn, anchors_rcnn, anchors_cwh_rcnn, ctr_rcnn, iou_rcnn, loc_rcnn = \
-                self.anchor_target(search_box, cfg.TRAIN.SEARCH_SIZE, is_neg)
-
         template_box -= cfg.TRAIN.EXEMPLAR_SIZE / 2.0
+        search_box -= cfg.TRAIN.SEARCH_SIZE / 2.0
+
+        ctr_rpn, aspect_rpn, anchors_rcnn, anchors_cwh_rcnn, ctr_rcnn, iou_rcnn, loc_rcnn = \
+                self.anchor_target(search_box, is_neg)
 
         ret = { \
                 'template': np.transpose(template_image, (2, 0, 1)).astype(np.float32),

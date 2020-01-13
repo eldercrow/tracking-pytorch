@@ -45,12 +45,12 @@ class ModelBuilder(nn.Module):
                 nn.Conv2d(self.neck.out_channels, rcnn_backbone.in_channels, 1, bias=False), \
                 nn.BatchNorm2d(rcnn_backbone.in_channels)
                 )
-        rcnn_post_backbone = nn.Sequential( \
-                nn.Conv2d(320, cfg.RCNN.KWARGS['in_channels'], 1, bias=False), \
-                nn.BatchNorm2d(cfg.RCNN.KWARGS['in_channels']), \
-                nn.ReLU(inplace=True)
-                )
-        self.rcnn_backbone = nn.Sequential(rcnn_pre_backbone, rcnn_backbone, rcnn_post_backbone)
+        # rcnn_post_backbone = nn.Sequential( \
+        #         nn.Conv2d(320, cfg.RCNN.KWARGS['in_channels'], 1, bias=False), \
+        #         nn.BatchNorm2d(cfg.RCNN.KWARGS['in_channels']), \
+        #         nn.ReLU(inplace=True)
+        #         )
+        self.rcnn_backbone = nn.Sequential(rcnn_pre_backbone, rcnn_backbone)
 
         # build rcnn head
         self.rcnn_head = get_rcnn_head(cfg.RCNN.TYPE,
@@ -59,8 +59,15 @@ class ModelBuilder(nn.Module):
     def template(self, z, roi_centered):
         zf = self.backbone(z)
         zf = self.neck(zf)
+
         # rcnn
-        self.zf = self.crop_align_feature(zf, torch.Tensor(roi_centered).cuda())
+        roi = torch.Tensor(roi_centered).cuda()
+        self.zf_rpn = self.crop_align_feature(zf, roi, (7, 7))
+
+        zf_rcnn = self.crop_align_feature(zf, roi, (15, 15))
+        zf_rcnn = self.rcnn_backbone(zf_rcnn)
+        self.zf_rcnn = torch.repeat_interleave(zf_rcnn, cfg.RCNN.NUM_ROI, dim=0)
+
         # self.zf = zf
 
     def track(self, x, anchor_cwh):
@@ -72,14 +79,14 @@ class ModelBuilder(nn.Module):
 
         # rpn
         # asp_rpn: [Nb, 1, 25, 25]
-        ctr_rpn, asp_rpn = self.rpn_head(self.zf, xf)
+        ctr_rpn, asp_rpn = self.rpn_head(self.zf_rpn, xf)
         asp_rpn = torch.sqrt(torch.exp(asp_rpn))
 
         # each will be [1, 1, 25, 25]
         ax, ay, aw, ah = torch.split(anchor_cwh, 1, dim=1)
 
-        aw = asp_rpn * aw.expand_as(asp_rpn)
-        ah = asp_rpn * ah.expand_as(asp_rpn)
+        aw = aw.expand_as(asp_rpn) * asp_rpn
+        ah = ah.expand_as(asp_rpn) / asp_rpn
 
         # [Nb, 4, 25, 25]
         anchor = torch.cat([ \
@@ -93,21 +100,28 @@ class ModelBuilder(nn.Module):
         assert x.shape[0] == 1
 
         # nms
-        anchor = torch.permute(torch.reshape(anchor, (4, -1)), (1 ,0))
+        anchor = anchor.view(4, -1).permute(1 ,0).contiguous()
         ctr_rpn = ctr_rpn.view(-1)
-        keep = nms(anchor, ctr_rpn, 0.6667)[:cfg.RCNN.NUM_ROI]
+        keep = nms(anchor, torch.sigmoid(ctr_rpn), 0.7)[:cfg.RCNN.NUM_ROI]
         anchor = torch.index_select(anchor, 0, keep)
 
         # roi align
         # [num_roi, ch, 7, 7]
-        xf_crop = self.crop_align_feature(xf, anchor.view(1, -1, 4))
+        xf_rcnn = self.crop_align_feature(xf, anchor.view(1, -1, 4), (15, 15))
+        xf_rcnn = self.rcnn_backbone(xf_rcnn)
+
+        ctr_rcnn, iou_rcnn, loc_rcnn = self.rcnn_head(self.zf_rcnn, xf_rcnn)
 
         return {
                 'ctr_rpn': ctr_rpn,
-                'asp_rpn': asp_rpn
+                'asp_rpn': asp_rpn,
+                'ctr_rcnn': ctr_rcnn,
+                'iou_rcnn': iou_rcnn,
+                'loc_rcnn': loc_rcnn,
+                'roi_rcnn': anchor
                }
 
-    def crop_align_feature(self, feat, roi, out_shape):
+    def crop_align_feature(self, feat, roi_centered, out_shape):
         '''
         rois are assumed to be centered
         '''
@@ -115,7 +129,7 @@ class ModelBuilder(nn.Module):
         hh, ww = feat.shape[2:4]
         assert hh == ww
         offset = (hh / 2.0 - 0.5) * cfg.ANCHOR.STRIDE
-        roi += offset
+        roi = roi_centered + offset
 
         scale = 1.0 / cfg.ANCHOR.STRIDE
         roi = tuple([r.view(-1, 4) for r in roi])
@@ -168,26 +182,27 @@ class ModelBuilder(nn.Module):
         # neck with concat
         zf = self.neck(zf)
         xf = self.neck(xf)
-        zf_crop = self.crop_align_feature(zf, template_box, (7, 7)) # (Nb, ch, 7, 7)
+        zf_rpn = self.crop_align_feature(zf, template_box, (7, 7)) # (Nb, ch, 7, 7)
 
         # rpn head
-        ctr_rpn, aspect_rpn = self.rpn_head(zf_crop, xf)
+        ctr_rpn, aspect_rpn = self.rpn_head(zf_rpn, xf)
 
         # rcnn
-        zf_crop_rcnn = self.crop_align_feature(zf, template_box, (15, 15))
-        xf_crop_rcnn = self.crop_align_feature(xf, anchors_rcnn, (15, 15))
+        zf_rcnn = self.crop_align_feature(zf, template_box, (15, 15))
+        xf_rcnn = self.crop_align_feature(xf, anchors_rcnn, (15, 15))
 
-        zf_crop_rcnn = self.rcnn_backbone(zf_crop_rcnn)
-        xf_crop_rcnn = self.rcnn_backbone(xf_crop_rcnn)
+        zf_rcnn = self.rcnn_backbone(zf_rcnn)
+        xf_rcnn = self.rcnn_backbone(xf_rcnn)
 
         # duplicate zf for cross correlation
-        num_roi = xf_crop_rcnn.shape[0] // zf_crop_rcnn.shape[0]
-        zf_crop_rcnn = torch.repeat_interleave(zf_crop_rcnn, num_roi, dim=0)
+        num_roi = xf_rcnn.shape[0] // zf_rcnn.shape[0]
+        assert num_roi == cfg.TRAIN.NUM_ROI * 2
+        zf_rcnn = torch.repeat_interleave(zf_rcnn, num_roi, dim=0)
 
         # [Nb*num_roi, 1, 1, 1]
         # [Nb*num_roi, 1, 1, 1]
         # [Nb*num_roi, 4, 1, 1]
-        ctr_rcnn, iou_rcnn, loc_rcnn = self.rcnn_head(zf_crop_rcnn, xf_crop_rcnn)
+        ctr_rcnn, iou_rcnn, loc_rcnn = self.rcnn_head(zf_rcnn, xf_rcnn)
 
         # get loss
         ctr_rpn_loss = select_bce_loss(ctr_rpn, label_ctr_rpn)

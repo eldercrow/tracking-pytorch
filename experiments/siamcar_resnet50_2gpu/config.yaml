@@ -1,0 +1,116 @@
+META_ARC: "siamcar_mobilenetv2"
+
+BACKBONE:
+    TYPE: "resnet50"
+    KWARGS:
+        pretrained: true
+    TRAIN_EPOCH: 10
+    LAYERS_LR: 0.1
+
+ADJUST:
+    ADJUST: true
+    TYPE: "AdjustAllLayer"
+    KWARGS:
+        in_channels: [512, 1024, 2048]
+        out_channels: [512, 1024, 512]
+
+# NONLOCAL:
+#     TYPE: 'MultiNonLocal'
+#     KWARGS:
+#         in_channels: [256, 256, 256]
+#         out_channels: [256, 256, 256]
+#         key_channels: [64, 64, 64]
+#         value_channels: [128, 128, 128]
+#         in_hw: 31
+
+RPN:
+    TYPE: 'DepthwiseRPN'
+    KWARGS:
+        in_channels: 2048
+        hiddens: 256
+        # weighted: true
+
+ANCHORLESS:
+    STRIDE: 8
+    SCALE: 64
+    OFFSET: 0.5
+
+# ANCHOR:
+#     STRIDE: 8
+#     RATIOS: [0.3333, 0.5, 1, 2, 3]
+#     SCALES: [8]
+#     ANCHOR_NUM: 5
+
+TRACK:
+    TYPE: 'SiamRPNTracker'
+    PENALTY_K: 0.05
+    WINDOW_INFLUENCE: 0.42
+    LR: 0.38
+    EXEMPLAR_SIZE: 127
+    INSTANCE_SIZE: 255
+    BASE_SIZE: 8
+    CONTEXT_AMOUNT: 0.5
+
+TRAIN:
+    EPOCH: 20
+    START_EPOCH: 0
+    BATCH_SIZE: 24
+    BASE_LR: 0.005
+    CLS_WEIGHT: 1.0
+    LOC_WEIGHT: 1.2
+    CTR_WEIGHT: 1.0
+    NUM_WORKERS: 3
+    RESUME: ''
+    PRETRAINED: ''
+    PRINT_FREQ: 100
+
+    LR:
+        TYPE: 'log'
+        KWARGS:
+            start_lr: 0.005
+            end_lr: 0.0005
+    LR_WARMUP:
+        TYPE: 'step'
+        EPOCH: 5
+        KWARGS:
+            start_lr: 0.001
+            end_lr: 0.005
+            step: 1
+
+DATASET:
+    NAMES: 
+    # - 'GOT10K'
+    - 'LASOT'
+    # - 'VID'
+    # - 'YOUTUBEBB'
+    - 'COCO'
+    # - 'DET'
+
+    # TEMPLATE:
+    #     SHIFT: 4
+    #     SCALE: 0.05
+    #     BLUR: 0.0
+    #     FLIP: 0.0
+    #     COLOR: 1.0
+    #
+    # SEARCH:
+    #     SHIFT: 64
+    #     SCALE: 0.18
+    #     BLUR: 0.2
+    #     FLIP: 0.0
+    #     COLOR: 1.0
+
+    NEG: 0.2
+    GRAY: 0.0
+
+    # GOT10K:
+    #     NUM_USE: 150000
+    LASOT:
+        NUM_USE: 150000
+    COCO:
+        NUM_USE: -1
+
+    SEARCH:
+        SCALE: 1.3333
+        ASPECT: 1.5
+        BLUR: 2.0
