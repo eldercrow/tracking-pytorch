@@ -85,7 +85,7 @@ DATASET:
     NAMES: 
     - 'GOT10K'
     - 'LASOT'
-    # - 'VID'
+    - 'VID'
     - 'COCO'
     - 'OPENIMAGE'
     # - 'YOUTUBEBB'
@@ -101,14 +101,14 @@ DATASET:
     VID:
         NUM_USE: 100000
     COCO:
-        NUM_USE: 100000
+        NUM_USE: 150000
     DET:
         NUM_USE: 100000
     OPENIMAGE:
-        ANNO: '~/dataset/openimage/crop/validation.json'
-        NUM_USE: 100000
+        ANNO: '~/dataset/openimage/crop/train.json'
+        NUM_USE: 150000
 
     SEARCH:
         SCALE: 1.3333
-        ASPECT: 1.3333
+        ASPECT: 1.5
         BLUR: 2.0

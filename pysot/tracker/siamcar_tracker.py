@@ -44,10 +44,16 @@ class SiamCARTracker(SiameseTracker):
         ah = roi[:, 3] - roi[:, 1]
 
         delta = delta.view(-1, 4).data.cpu().numpy()
-        delta[:, 0] = ax - delta[:, 0] * aw
-        delta[:, 1] = ay - delta[:, 1] * ah
-        delta[:, 2] = ax + delta[:, 2] * aw
-        delta[:, 3] = ay + delta[:, 3] * ah
+        x0 = ax - delta[:, 0] * aw
+        y0 = ay - delta[:, 1] * ah
+        x1 = ax + delta[:, 2] * aw
+        y1 = ay + delta[:, 3] * ah
+
+        delta[:, 0] = x0
+        delta[:, 1] = y0
+        delta[:, 2] = x1 - x0
+        delta[:, 3] = y1 - y0
+        # delta[:, :2] += cfg.TRACK.INSTANCE_SIZE / 2.0
         return delta
 
     # def _convert_score(self, score):
@@ -79,7 +85,7 @@ class SiamCARTracker(SiameseTracker):
             img(np.ndarray): BGR image
             bbox: (x, y, w, h) bbox
         """
-        self.bbox0 = [b for b in bbox]
+        # self.bbox0 = [b for b in bbox]
         self.center_pos = [bbox[0] + bbox[2]*0.5, bbox[1] + bbox[3]*0.5]
         self.center_pos = np.array(self.center_pos)
         # self.center_pos = np.array([bbox[0]+(bbox[2]-1)/2,
@@ -104,7 +110,7 @@ class SiamCARTracker(SiameseTracker):
         roi_centered = np.reshape(roi_centered, (1, 1, 4))
 
         self.model.template(z_crop, roi_centered)
-        self.roi_centered = roi_centered
+        # self.roi_centered = roi_centered
 
         # zf_rpn = self.model.zf_rpn
         # zf_rcnn = self.model.zf_rcnn
@@ -139,8 +145,7 @@ class SiamCARTracker(SiameseTracker):
         iou = self._convert_centerness(outputs['iou_rcnn'])
         score = ctr * iou
 
-        import ipdb
-        ipdb.set_trace()
+        # should be in [cx, cy, w, h] format
         pred_bbox = self._convert_bbox(outputs['loc_rcnn'], outputs['roi_rcnn'])
 
         def change(r):
@@ -174,8 +179,8 @@ class SiamCARTracker(SiameseTracker):
         bbox /= scale_z
         lr = penalty[best_idx] * score[best_idx] * cfg.TRACK.LR
 
-        cx = bbox[0] + self.center_pos[0]
-        cy = bbox[1] + self.center_pos[1]
+        cx = bbox[0] + self.center_pos[0] + bbox[2] * 0.5
+        cy = bbox[1] + self.center_pos[1] + bbox[3] * 0.5
 
         # smooth bbox
         width = self.size[0] * (1 - lr) + bbox[2] * lr
