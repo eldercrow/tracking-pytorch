@@ -33,8 +33,10 @@ RPN:
 
 RCNN:
     TYPE: 'DepthwiseRCNN'
+    NUM_ROI: 32
     KWARGS:
         in_channels: 320
+        in_channels_z: 768
         preproc_channels: 640
         hiddens: 256
 
@@ -64,9 +66,9 @@ TRAIN:
     CTR_WEIGHT: 1.0
     NUM_WORKERS: 3
     RESUME: ''
-    PRETRAINED: ''
+    PRETRAINED: 'snapshot/checkpoint_e20.pth'
     PRINT_FREQ: 100
-    NUM_ROI: 24
+    NUM_ROI: 48
 
     LR:
         TYPE: 'log'
@@ -97,16 +99,16 @@ DATASET:
     GOT10K:
         NUM_USE: 100000
     LASOT:
-        NUM_USE: 100000
+        NUM_USE: 200000
     VID:
         NUM_USE: 100000
     COCO:
-        NUM_USE: 150000
+        NUM_USE: 200000
     DET:
-        NUM_USE: 100000
+        NUM_USE: 200000
     OPENIMAGE:
         ANNO: '~/dataset/openimage/crop/train.json'
-        NUM_USE: 150000
+        NUM_USE: 200000
 
     SEARCH:
         SCALE: 1.3333

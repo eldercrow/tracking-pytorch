@@ -14,12 +14,15 @@ from pysot.utils.anchor import Anchors, generate_anchor
 from pysot.utils.bbox import IoU, center2corner
 from pysot.tracker.base_tracker import SiameseTracker
 
+from matplotlib import pyplot as plt
+
 
 class SiamCARTracker(SiameseTracker):
     def __init__(self, model):
         super(SiamCARTracker, self).__init__()
         self.score_size = (cfg.TRACK.INSTANCE_SIZE - cfg.TRACK.EXEMPLAR_SIZE) // \
             cfg.ANCHOR.STRIDE + 1 + cfg.TRACK.BASE_SIZE
+        assert self.score_size == cfg.TRAIN.OUTPUT_SIZE
         hanning = np.hanning(self.score_size)
         window = np.outer(hanning, hanning)
         self.window = window.flatten()
@@ -28,9 +31,20 @@ class SiamCARTracker(SiameseTracker):
                                                cfg.ANCHOR.RATIOS, \
                                                cfg.ANCHOR.STRIDE)
 
-        self.anchors_cwh = torch.Tensor(np.expand_dims(anchors_cwh, 0)).cuda()
+        self.anchors_cwh = anchors_cwh #torch.Tensor(np.expand_dims(anchors_cwh, 0)).cuda()
         self.model = model
         self.model.eval()
+
+    def _hanning(self, xywh):
+        '''
+        xywh: (x0, y0, w, h)
+        '''
+        cx = xywh[:, 0] + xywh[:, 2] * 0.5
+        cy = xywh[:, 1] + xywh[:, 3] * 0.5
+        M = cfg.TRACK.INSTANCE_SIZE - 1
+        hx = 0.5 + 0.5 * np.cos(2.0 * np.pi * cx / M)
+        hy = 0.5 + 0.5 * np.cos(2.0 * np.pi * cy / M)
+        return hx * hy
 
     def _convert_bbox(self, delta, roi):
         '''
@@ -48,6 +62,10 @@ class SiamCARTracker(SiameseTracker):
         y0 = ay - delta[:, 1] * ah
         x1 = ax + delta[:, 2] * aw
         y1 = ay + delta[:, 3] * ah
+        # x0 = ax - aw * 0.5
+        # y0 = ay - ah * 0.5
+        # x1 = ax + aw * 0.5
+        # y1 = ay + ah * 0.5
 
         delta[:, 0] = x0
         delta[:, 1] = y0
@@ -56,13 +74,13 @@ class SiamCARTracker(SiameseTracker):
         # delta[:, :2] += cfg.TRACK.INSTANCE_SIZE / 2.0
         return delta
 
-    # def _convert_score(self, score):
-    #     '''
-    #     score: [Nb*num_roi, 2, 1, 1]
-    #     '''
-    #     score = score.view(-1, 2)
-    #     score = F.softmax(score, dim=1).data[:, 1].cpu().numpy()
-    #     return score
+    def _convert_score(self, score):
+        '''
+        score: [Nb*num_roi, 2, 1, 1]
+        '''
+        score = score.view(-1, 2)
+        score = F.softmax(score, dim=1).data[:, 1].cpu().numpy()
+        return score
 
     def _convert_centerness(self, ctr):
         ctr = torch.sigmoid(ctr.view(-1)).data.cpu().numpy()
@@ -109,6 +127,8 @@ class SiamCARTracker(SiameseTracker):
         roi_centered = np.array(roi) - np.tile(self.center_pos, (2,))
         roi_centered = np.reshape(roi_centered, (1, 1, 4))
 
+        self.img_z = np.transpose(np.reshape(z_crop.data.cpu().numpy(), (3, 127, 127)), (1, 2, 0)) / 255.0
+
         self.model.template(z_crop, roi_centered)
         # self.roi_centered = roi_centered
 
@@ -132,18 +152,21 @@ class SiamCARTracker(SiameseTracker):
                                     cfg.TRACK.INSTANCE_SIZE,
                                     round(s_x), self.channel_average)
 
+        self.img_x = np.transpose(np.reshape(x_crop.data.cpu().numpy(), (3, 255, 255)), (1, 2, 0)) / 255.0
+
         # 'cls': cls,
         # 'loc': loc,
         # 'xf': xf,
         # 'mask': mask if cfg.MASK.MASK else None
-        outputs = self.model.track(x_crop, self.anchors_cwh)
+        # outputs = self.model.track(x_crop, self.anchors_cwh)
+        outputs = self.model.track(x_crop, torch.Tensor(np.expand_dims(self.anchors_cwh, 0)).cuda())
 
         ctr_rpn = self._convert_centerness(outputs['ctr_rpn'])
         asp_rpn = self._convert_aspect(outputs['asp_rpn'])
 
         ctr = self._convert_centerness(outputs['ctr_rcnn'])
-        iou = self._convert_centerness(outputs['iou_rcnn'])
-        score = ctr * iou
+        cls = self._convert_score(outputs['cls_rcnn'])
+        score = cls * ctr
 
         # should be in [cx, cy, w, h] format
         pred_bbox = self._convert_bbox(outputs['loc_rcnn'], outputs['roi_rcnn'])
@@ -163,17 +186,19 @@ class SiamCARTracker(SiameseTracker):
         r_c = change((self.size[0]/self.size[1]) /
                      (pred_bbox[:, 2]/pred_bbox[:, 3]))
         penalty = np.exp(-(r_c * s_c - 1) * cfg.TRACK.PENALTY_K)
-        pscore = penalty * score
+        # pscore = penalty * score
+        pscore = score
 
         # window penalty
+        window = self._hanning(pred_bbox)
+        pscore = pscore * (1 - cfg.TRACK.WINDOW_INFLUENCE) + \
+                 window * cfg.TRACK.WINDOW_INFLUENCE
         # pscore *= self.window
         # pscore = pscore * (1 - cfg.TRACK.WINDOW_INFLUENCE) + \
         #     self.window * cfg.TRACK.WINDOW_INFLUENCE
         best_idx = np.argmax(pscore)
 
-        # import ipdb
-        # ipdb.set_trace()
-        bbox = pred_bbox[best_idx, :]
+        bbox = pred_bbox[best_idx, :].copy()
         # bbox[:2] += cfg.TRACK.INSTANCE_SIZE / 2.0
         # iou = IoU(center2corner(bbox), center2corner(np.transpose(self.anchors)))
         bbox /= scale_z
@@ -189,6 +214,11 @@ class SiamCARTracker(SiameseTracker):
         # clip boundary
         # cx, cy, width, height = self._bbox_clip(cx, cy, width,
         #                                         height, img.shape[:2])
+
+        # transform all the pred_bbox, for debug
+        pred_bbox /= scale_z
+        pred_bbox[:, 0] += self.center_pos[0]
+        pred_bbox[:, 1] += self.center_pos[1]
 
         # udpate state
         self.center_pos = np.array([cx, cy])
@@ -207,7 +237,7 @@ class SiamCARTracker(SiameseTracker):
                 'pscore': pscore,
                 'score': score,
                 'ctr_rcnn': ctr,
-                'iou_rcnn': iou,
+                'cls_rcnn': cls,
                 'pred_bbox': pred_bbox,
                 'ctr_rpn': ctr_rpn,
                 'asp_rpn': asp_rpn

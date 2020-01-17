@@ -12,7 +12,7 @@ import torch.nn.functional as F
 def get_cls_loss(pred, label, select, weight=None):
     if len(select.size()) == 0 or \
             select.size() == torch.Size([0]):
-        return torch.tensor(0)
+        return torch.Tensor((0.0,)).cuda()
     pred = torch.index_select(pred, 0, select)
     label = torch.index_select(label, 0, select)
     if weight is None:
@@ -27,23 +27,24 @@ def get_cls_loss(pred, label, select, weight=None):
 def get_bce_loss(pred, label, select):
     if len(select.size()) == 0 or \
             select.size() == torch.Size([0]):
-        return torch.tensor(0)
+        return torch.Tensor((0.0,)).cuda()
     pred = torch.index_select(pred, 0, select)
     label = torch.index_select(label, 0, select)
     return F.binary_cross_entropy_with_logits(pred, label)
 
 
 def weight_l1_loss(pred_loc, label_loc, loss_weight):
-    b = pred_loc.shape[0]
-    pred_loc = pred_loc.view(-1, 4)
-    label_loc = label_loc.view(-1, 4)
+    nch = pred_loc.shape[1]
+    # b = pred_loc.shape[0]
+    pred_loc = pred_loc.view(-1, nch)
+    label_loc = label_loc.view(-1, nch)
     loss_weight = loss_weight.view(-1)
     # b, _, sh, sw = pred_loc.size()
     # # pred_loc = pred_loc.view(b, 4, -1, sh, sw)
     diff = (pred_loc - label_loc).abs()
     diff = diff.sum(dim=1)
     loss = diff * loss_weight
-    return loss.sum().div(b)
+    return loss.sum().div(loss_weight.sum() + 1e-08)
 
 
 def weight_asp_loss(pred_asp, label_asp, loss_weight):
@@ -54,10 +55,9 @@ def weight_asp_loss(pred_asp, label_asp, loss_weight):
     return loss.sum().div(b)
 
 
-def select_cross_entropy_loss(pred, label, weight):
+def select_cross_entropy_loss(pred, label):
     pred = pred.view(-1, 2)
     label = label.view(-1)
-    weight = weight.view(-1)
     pos = label.data.eq(1).nonzero().squeeze().cuda()
     neg = label.data.eq(0).nonzero().squeeze().cuda()
     loss_pos = get_cls_loss(pred, label, pos)

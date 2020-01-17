@@ -58,6 +58,12 @@ class DepthwiseRPN(RPN):
                 nn.ReLU(inplace=True),
                 nn.Conv2d(hiddens, 1, kernel_size=1, bias=True)
                 )
+        self.loc = nn.Sequential(
+                nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
+                nn.BatchNorm2d(hiddens),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(hiddens, 2, kernel_size=1, bias=True)
+                )
 
     def forward(self, z_f, x_f):
         if isinstance(z_f, (list, tuple)):
@@ -71,4 +77,5 @@ class DepthwiseRPN(RPN):
 
         ctr = self.ctr(feature)
         asp = self.asp(feature)
-        return ctr, asp
+        loc = self.loc(feature)
+        return ctr, asp, loc

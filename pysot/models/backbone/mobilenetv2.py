@@ -62,6 +62,8 @@ class InvertedResidual(nn.Module):
             nn.BatchNorm2d(oup),
         ])
         self.conv = nn.Sequential(*layers)
+        # self.padding = padding if padding >= 0 else dilation
+        # self.dilation = dilation
 
     def forward(self, x):
         if self.use_res_connect:

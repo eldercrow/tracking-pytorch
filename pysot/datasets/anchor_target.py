@@ -31,10 +31,9 @@ class AnchorTarget:
         # cls_rpn = -1 * np.ones((anchor_num, sz_anc, sz_anc), dtype=np.int64)
         asp = (target_c[2] - target_c[0]) / (target_c[3] - target_c[1])
         aspect_rpn = np.log(asp).astype(np.float32)
-        aspect_w_rpn = np.zeros((sz_anc, sz_anc), dtype=np.float32)
-
         ctr_rpn = -1 * np.ones((sz_anc, sz_anc), dtype=np.float32)
-        
+        loc_rpn = np.ones((2, sz_anc, sz_anc), dtype=np.float32)
+
         # for 2nd stage
         # rcnn_delta = np.zeros((4, cfg.RCNN.NUM_ROI), dtype=np.float32)
         # rcnn_iou = -1 * np.ones((cfg.RCNN.NUM_ROI,), dtype=np.float32)
@@ -60,10 +59,18 @@ class AnchorTarget:
                           x1 - self.anchors_cwh[0], \
                           y1 - self.anchors_cwh[1]], axis=0)
 
+        loc_rpn[0] = (x1 + x0) * 0.5 - self.anchors_cwh[0]
+        loc_rpn[1] = (y1 + y0) * 0.5 - self.anchors_cwh[1]
+        loc_rpn[0] /= self.anchors_cwh[2]
+        loc_rpn[1] /= self.anchors_cwh[3]
+
         # [25, 25]
         pos_mask = np.all(delta > 0, axis=0)
         # [4, 25, 25]
         delta = np.maximum(delta, 0)
+
+        # do not regress non-positives
+        loc_rpn *= pos_mask
 
         Mdx = np.maximum(delta[0], delta[2])
         mdx = np.minimum(delta[0], delta[2])
@@ -74,54 +81,54 @@ class AnchorTarget:
         pos_all = np.where(pos_mask == True)
         neg_all = np.where(pos_mask == False)
 
-        pos_2nd, _ = select(pos_all, cfg.TRAIN.NUM_ROI, True)
-        neg_2nd, _ = select(neg_all, cfg.TRAIN.NUM_ROI, True)
+        # pos_2nd, _ = select(pos_all, cfg.TRAIN.NUM_ROI, True)
+        # neg_2nd, _ = select(neg_all, cfg.TRAIN.NUM_ROI, True)
 
         pos, _ = select(pos_all, cfg.TRAIN.POS_NUM)
         neg, _ = select(neg_all, cfg.TRAIN.TOTAL_NUM - cfg.TRAIN.POS_NUM)
 
-        # (4, NUM_ROI*2)
-        pn_2nd = tuple([np.hstack([p, n]) for p, n in zip(pos_2nd, neg_2nd)])
-        anchors_cwh_2nd = np.stack([self.anchors_cwh[i][pn_2nd] for i in range(4)], axis=0)
-        num_roi = pn_2nd[0].size
+        # # (4, NUM_ROI*2)
+        # pn_2nd = tuple([np.hstack([p, n]) for p, n in zip(pos_2nd, neg_2nd)])
+        # anchors_cwh_2nd = np.stack([self.anchors_cwh[i][pn_2nd] for i in range(4)], axis=0)
+        # num_roi = pn_2nd[0].size
 
-        # randomness to anchors_2nd
-        asp2 = np.sqrt(np.exp(aspect_rpn + np.clip(np.random.normal(0.0, 0.333, num_roi), -1.0, 1.0)))
-        anchors_cwh_2nd = np.stack([ \
-                anchors_cwh_2nd[0], \
-                anchors_cwh_2nd[1], \
-                anchors_cwh_2nd[2] * asp2, \
-                anchors_cwh_2nd[3] / asp2], axis=0).astype(np.float32)
+        # # randomness to anchors_2nd
+        # asp2 = np.sqrt(np.exp(aspect_rpn + np.clip(np.random.normal(0.0, 0.333, num_roi), -1.0, 1.0)))
+        # anchors_cwh_2nd = np.stack([ \
+        #         anchors_cwh_2nd[0], \
+        #         anchors_cwh_2nd[1], \
+        #         anchors_cwh_2nd[2] * asp2, \
+        #         anchors_cwh_2nd[3] / asp2], axis=0).astype(np.float32)
 
-        w2 = 0.5 * anchors_cwh_2nd[2]
-        h2 = 0.5 * anchors_cwh_2nd[3]
-        anchors_2nd = np.stack([ \
-                anchors_cwh_2nd[0] - w2, \
-                anchors_cwh_2nd[1] - h2, \
-                anchors_cwh_2nd[0] + w2, \
-                anchors_cwh_2nd[1] + h2], axis=0).astype(np.float32)
+        # w2 = 0.5 * anchors_cwh_2nd[2]
+        # h2 = 0.5 * anchors_cwh_2nd[3]
+        # anchors_2nd = np.stack([ \
+        #         anchors_cwh_2nd[0] - w2, \
+        #         anchors_cwh_2nd[1] - h2, \
+        #         anchors_cwh_2nd[0] + w2, \
+        #         anchors_cwh_2nd[1] + h2], axis=0).astype(np.float32)
 
         if is_neg:
             ctr_rpn[pos_mask] = 0
-            ctr_2nd = np.zeros((num_roi,), dtype=np.float32)
-            iou_2nd = np.zeros((num_roi,), dtype=np.float32)
-            loc_2nd = np.zeros((4, num_roi), dtype=np.float32)
-            return ctr_rpn, aspect_rpn, \
-                   np.transpose(anchors_2nd, (1, 0)), np.transpose(anchors_cwh_2nd, (1, 0)), \
-                   ctr_2nd, iou_2nd, np.transpose(loc_2nd, (1, 0))
+            # ctr_2nd = np.zeros((num_roi,), dtype=np.float32)
+            # iou_2nd = np.zeros((num_roi,), dtype=np.float32)
+            # loc_2nd = np.zeros((4, num_roi), dtype=np.float32)
+            return ctr_rpn, aspect_rpn, loc_rpn, np.random.uniform(0.0, 1.0) * ctr #, \
+                #    np.transpose(anchors_2nd, (1, 0)), np.transpose(anchors_cwh_2nd, (1, 0)), \
+                #    ctr_2nd, iou_2nd, np.transpose(loc_2nd, (1, 0))
 
         # label for rpn
         ctr_rpn[pos] = ctr[pos]
         ctr_rpn[neg] = 0
 
-        # label for rcnn
-        ctr_2nd = ctr[pn_2nd] # [NUM_ROI*2]
-        iou_2nd = IoU(target_c, anchors_2nd) # [NUM_ROI*2]
-        loc_2nd = np.stack([delta[0][pn_2nd] / anchors_cwh_2nd[2], \
-                            delta[1][pn_2nd] / anchors_cwh_2nd[3], \
-                            delta[2][pn_2nd] / anchors_cwh_2nd[2], \
-                            delta[3][pn_2nd] / anchors_cwh_2nd[3]], axis=0)
+        # # label for rcnn
+        # ctr_2nd = ctr[pn_2nd] # [NUM_ROI*2]
+        # iou_2nd = IoU(target_c, anchors_2nd) # [NUM_ROI*2]
+        # loc_2nd = np.stack([delta[0][pn_2nd] / anchors_cwh_2nd[2], \
+        #                     delta[1][pn_2nd] / anchors_cwh_2nd[3], \
+        #                     delta[2][pn_2nd] / anchors_cwh_2nd[2], \
+        #                     delta[3][pn_2nd] / anchors_cwh_2nd[3]], axis=0)
 
-        return ctr_rpn, aspect_rpn, \
-               np.transpose(anchors_2nd, (1, 0)), np.transpose(anchors_cwh_2nd, (1, 0)), \
-               ctr_2nd, iou_2nd, np.transpose(loc_2nd, (1, 0))
+        return ctr_rpn, aspect_rpn, loc_rpn, np.random.uniform(0.0, 1.0) * ctr #, \
+            #    np.transpose(anchors_2nd, (1, 0)), np.transpose(anchors_cwh_2nd, (1, 0)), \
+            #    ctr_2nd, iou_2nd, np.transpose(loc_2nd, (1, 0))
