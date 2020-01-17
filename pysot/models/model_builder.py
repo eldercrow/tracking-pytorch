@@ -17,7 +17,7 @@ from pysot.models.backbone import get_backbone
 from pysot.models.head import get_rpn_head, get_rcnn_head
 from pysot.models.neck import get_neck
 from pysot.models.non_local import get_nonlocal
-from pysot.models.backbone import mobilenet_v2_rcnn
+# from pysot.models.backbone import mobilenet_v2_rcnn
 from pysot.datasets.assign_target import AssignTarget
 
 
@@ -37,18 +37,6 @@ class ModelBuilder(nn.Module):
         self.rpn_head = get_rpn_head(cfg.RPN.TYPE,
                                      **cfg.RPN.KWARGS)
 
-        rcnn_backbone = mobilenet_v2_rcnn(**cfg.BACKBONE.KWARGS)
-        rcnn_pre_backbone = nn.Sequential( \
-                nn.Conv2d(self.neck.out_channels, rcnn_backbone.in_channels, 1, bias=False), \
-                nn.BatchNorm2d(rcnn_backbone.in_channels)
-                )
-        # rcnn_post_backbone = nn.Sequential( \
-        #         nn.Conv2d(320, cfg.RCNN.KWARGS['in_channels'], 1, bias=False), \
-        #         nn.BatchNorm2d(cfg.RCNN.KWARGS['in_channels']), \
-        #         nn.ReLU(inplace=True)
-        #         )
-        self.rcnn_backbone = nn.Sequential(rcnn_pre_backbone, rcnn_backbone)
-
         # build rcnn head
         self.rcnn_head = get_rcnn_head(cfg.RCNN.TYPE,
                                        **cfg.RCNN.KWARGS)
@@ -63,9 +51,8 @@ class ModelBuilder(nn.Module):
         roi = torch.Tensor(roi_centered).cuda()
         self.zf_rpn = self.crop_align_feature(zf, roi, (7, 7))
 
-        # zf_rcnn = self.crop_align_feature(zf, roi, (11, 11))
-        # zf_rcnn = self.rcnn_backbone(zf_rcnn)
-        zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
+        zf_rcnn = self.crop_align_feature(zf, roi, (11, 11))
+        # zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
         self.zf_rcnn = torch.repeat_interleave(zf_rcnn, cfg.RCNN.NUM_ROI, dim=0)
 
         # self.zf = zf
@@ -111,7 +98,7 @@ class ModelBuilder(nn.Module):
         # roi align
         # [num_roi, ch, 7, 7]
         xf_rcnn = self.crop_align_feature(xf, anchor.view(1, -1, 4), (11, 11))
-        xf_rcnn = self.rcnn_backbone(xf_rcnn)
+        # xf_rcnn = self.rcnn_backbone(xf_rcnn)
 
         ctr_rcnn, cls_rcnn, loc_rcnn = self.rcnn_head(self.zf_rcnn, xf_rcnn)
         ctr_rcnn = 0.5 * (ctr_rcnn.view(-1) + ctr_rpn[keep])
@@ -198,11 +185,8 @@ class ModelBuilder(nn.Module):
                 self.assign_target(search_box, anchors_cwh, ctr_rpn, aspect_rpn, loc_rpn, gt_ctr_rpn)
 
         # rcnn
-        zf_rcnn = zf[:, :, 4:11, 4:11] #self.crop_align_feature(zf, template_box, (11, 11))
+        zf_rcnn = self.crop_align_feature(zf, template_box, (11, 11))
         xf_rcnn = self.crop_align_feature(xf, anchors_rcnn, (11, 11))
-
-        # zf_rcnn = self.rcnn_backbone(zf_rcnn)
-        xf_rcnn = self.rcnn_backbone(xf_rcnn)
 
         # duplicate zf for cross correlation
         num_roi = xf_rcnn.shape[0] // zf_rcnn.shape[0]

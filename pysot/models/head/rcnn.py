@@ -24,16 +24,18 @@ class RCNN(nn.Module):
 
 
 class DepthwiseRCNN(RCNN):
-    def __init__(self, in_channels=256, in_channels_z=576, preproc_channels=256, hiddens=256):
+    def __init__(self, in_channels=256, preproc_channels=256, hiddens=256):
         super(DepthwiseRCNN, self).__init__()
         self.preproc_z = nn.Sequential(
-                nn.Conv2d(in_channels_z, in_channels_z, 3, bias=False, groups=in_channels_z),
-                nn.BatchNorm2d(in_channels_z),
-                nn.Conv2d(in_channels_z, preproc_channels, 1, bias=False),
+                nn.Conv2d(in_channels, in_channels, 3, stride=2, bias=False, groups=in_channels),
+                nn.BatchNorm2d(in_channels),
+                nn.Conv2d(in_channels, preproc_channels, 1, bias=False),
                 nn.BatchNorm2d(preproc_channels),
                 nn.ReLU(inplace=True)
                 )
         self.preproc_x = nn.Sequential(
+                nn.Conv2d(in_channels, in_channels, 3, stride=2, bias=False, groups=in_channels),
+                nn.BatchNorm2d(in_channels),
                 nn.Conv2d(in_channels, preproc_channels, 1, bias=False),
                 nn.BatchNorm2d(preproc_channels),
                 nn.ReLU(inplace=True)

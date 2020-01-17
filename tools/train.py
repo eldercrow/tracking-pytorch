@@ -107,8 +107,8 @@ def build_opt_lr(model, current_epoch=0):
     trainable_params += [{'params': model.rpn_head.parameters(),
                           'lr': cfg.TRAIN.BASE_LR}]
 
-    trainable_params += [{'params': model.rcnn_backbone.parameters(),
-                          'lr': cfg.TRAIN.BASE_LR}]
+    # trainable_params += [{'params': model.rcnn_backbone.parameters(),
+    #                       'lr': cfg.TRAIN.BASE_LR}]
 
     trainable_params += [{'params': model.rcnn_head.parameters(),
                           'lr': cfg.TRAIN.BASE_LR}]

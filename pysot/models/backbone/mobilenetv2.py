@@ -104,8 +104,8 @@ class MobileNetV2(nn.Module):
                 [6, 32, 3, 2, 1],
                 [6, 64, 4, 1, 2],
                 [6, 96, 3, 1, 2],
-                # [6, 160, 3, 1, 3],
-                # [6, 320, 1, 1, 3],
+                [6, 160, 3, 1, 4],
+                [6, 320, 1, 1, 4],
             ]
 
         # only check the first element, assuming user knows t,c,n,s are required
@@ -152,7 +152,7 @@ class MobileNetV2(nn.Module):
     def _forward_impl(self, x):
         # This exists since TorchScript doesn't support inheritance, so the superclass method
         # (this one) needs to have a name other than `forward` that can be accessed in a subclass
-        out_ids = [6, 13]
+        out_ids = [6, 13, 17]
         outputs = []
         for ii, layer in enumerate(self.features):
             x = layer(x)
@@ -192,116 +192,3 @@ def mobilenet_v2(pretrained=False, progress=True, **kwargs):
         model.load_state_dict(model_dict)
     return model
 
-
-
-class MobileNetV2_RCNN(nn.Module):
-    def __init__(self,
-                 width_mult=1.0,
-                 round_nearest=8):
-        """
-        MobileNet V2 main class
-        Args:
-            num_classes (int): Number of classes
-            width_mult (float): Width multiplier - adjusts number of channels in each layer by this amount
-            inverted_residual_setting: Network structure
-            round_nearest (int): Round the number of channels in each layer to be a multiple of this number
-            Set to 1 to turn off rounding
-            block: Module specifying inverted residual building block for mobilenet
-        """
-        super(MobileNetV2_RCNN, self).__init__()
-
-        self.in_channels = 128
-        input_channel = self.in_channels
-
-        block = InvertedResidual
-        inverted_residual_setting = [
-            # t, c, n, s, d
-            # [1, 16, 1, 1, 1],
-            # [6, 24, 2, 2, 1],
-            # [6, 32, 3, 2, 1],
-            # [6, 64, 4, 1, 2],
-            # [6, 96, 3, 1, 1],
-            [6, 160, 3, 2, 1],
-            [6, 320, 1, 1, 1],
-        ]
-
-        # only check the first element, assuming user knows t,c,n,s are required
-        if len(inverted_residual_setting) == 0 or len(inverted_residual_setting[0]) != 5:
-            raise ValueError("inverted_residual_setting should be non-empty "
-                             "or a 5-element list, got {}".format(inverted_residual_setting))
-
-        # building first layer
-        features = []
-        # building inverted residual blocks
-        for t, c, n, s, d in inverted_residual_setting:
-            output_channel = _make_divisible(c * width_mult, round_nearest)
-            for i in range(n):
-                stride = s if i == 0 else 1
-                padding = 0 if stride > 1 else -1
-                features.append(block(input_channel, output_channel, stride, padding, d, expand_ratio=t))
-                input_channel = output_channel
-        # building last several layers
-        self.features = nn.ModuleList(features)
-
-        # weight initialization
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out')
-                if m.bias is not None:
-                    nn.init.zeros_(m.bias)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.ones_(m.weight)
-                nn.init.zeros_(m.bias)
-            elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, 0, 0.01)
-                nn.init.zeros_(m.bias)
-
-    def _forward_impl(self, x):
-        # This exists since TorchScript doesn't support inheritance, so the superclass method
-        # (this one) needs to have a name other than `forward` that can be accessed in a subclass
-        for ii, layer in enumerate(self.features):
-            x = layer(x)
-        return x
-
-    def forward(self, x):
-        return self._forward_impl(x)
-
-
-def mobilenet_v2_rcnn(pretrained=False, progress=True, **kwargs):
-    """
-    Constructs a MobileNetV2 architecture from
-    `"MobileNetV2: Inverted Residuals and Linear Bottlenecks" <https://arxiv.org/abs/1801.04381>`_.
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-        progress (bool): If True, displays a progress bar of the download to stderr
-    """
-    model = MobileNetV2_RCNN(**kwargs)
-    if pretrained:
-        state_dict = load_state_dict_from_url(model_urls['mobilenet_v2'],
-                                              progress=progress)
-        
-        # load
-        model_dict = model.state_dict()
-        # 1. filter out unnecessary keys
-#         ignored_keys = [k for k in state_dict if k not in model_dict]
-#         print(ignored_keys)
-        keys = [k for k in model_dict.keys()]
-
-        #
-        def _convert_key(k, offset):
-            kt = k.split('.')
-            idx = int(kt[1])
-            if idx == 0:
-                return ''
-            kt[1] = str(idx + offset)
-            return '.'.join(kt)
-        #
-        keys = [_convert_key(k, 14) for k in keys]
-        keys = [k for k in keys if k]
-
-        state_dict = {_convert_key(k, -14): v for k, v in state_dict.items() if k in keys}
-        # 2. overwrite entries in the existing state dict
-        model_dict.update(state_dict) 
-        # 3. load the new state dict
-        model.load_state_dict(model_dict)
-    return model

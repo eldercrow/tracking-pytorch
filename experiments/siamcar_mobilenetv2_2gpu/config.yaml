@@ -11,8 +11,8 @@ ADJUST:
     ADJUST: true
     TYPE: "AdjustAllLayer"
     KWARGS:
-        in_channels: [32, 96]
-        out_channels: [192, 576]
+        in_channels: [32, 96, 320]
+        out_channels: [192, 576, 256]
 
 # NONLOCAL:
 #     TYPE: 'MultiNonLocal'
@@ -26,7 +26,7 @@ ADJUST:
 RPN:
     TYPE: 'DepthwiseRPN'
     KWARGS:
-        in_channels: 768
+        in_channels: 1024
         hiddens: 256
         num_anchor: 5
         # weighted: true
@@ -35,9 +35,8 @@ RCNN:
     TYPE: 'DepthwiseRCNN'
     NUM_ROI: 32
     KWARGS:
-        in_channels: 320
-        in_channels_z: 768
-        preproc_channels: 640
+        in_channels: 1024
+        preproc_channels: 1024
         hiddens: 256
 
 ANCHOR:
@@ -66,7 +65,7 @@ TRAIN:
     CTR_WEIGHT: 1.0
     NUM_WORKERS: 3
     RESUME: ''
-    PRETRAINED: 'snapshot/checkpoint_e20.pth'
+    PRETRAINED: ''
     PRINT_FREQ: 100
     NUM_ROI: 48
 
