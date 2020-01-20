@@ -41,7 +41,9 @@ class ModelBuilder(nn.Module):
         self.rcnn_head = get_rcnn_head(cfg.RCNN.TYPE,
                                        **cfg.RCNN.KWARGS)
 
-        self.assign_target = AssignTarget(cfg.TRAIN.NUM_ROI)
+        self.assign_target = AssignTarget(cfg.TRAIN.RCNN.NUM_ROI, \
+                                          cfg.TRAIN.RCNN.SCALE, \
+                                          cfg.TRAIN.RCNN.ASPECT)
 
     def template(self, z, roi_centered):
         zf = self.backbone(z)
@@ -51,8 +53,8 @@ class ModelBuilder(nn.Module):
         roi = torch.Tensor(roi_centered).cuda()
         self.zf_rpn = self.crop_align_feature(zf, roi, (7, 7))
 
-        zf_rcnn = self.crop_align_feature(zf, roi, (11, 11))
-        # zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
+        # zf_rcnn = self.crop_align_feature(zf, roi, (11, 11))
+        zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
         self.zf_rcnn = torch.repeat_interleave(zf_rcnn, cfg.RCNN.NUM_ROI, dim=0)
 
         # self.zf = zf
@@ -97,7 +99,7 @@ class ModelBuilder(nn.Module):
 
         # roi align
         # [num_roi, ch, 7, 7]
-        xf_rcnn = self.crop_align_feature(xf, anchor.view(1, -1, 4), (11, 11))
+        xf_rcnn = self.crop_align_feature(xf, anchor.view(1, -1, 4), (7, 7))
         # xf_rcnn = self.rcnn_backbone(xf_rcnn)
 
         ctr_rcnn, cls_rcnn, loc_rcnn = self.rcnn_head(self.zf_rcnn, xf_rcnn)
@@ -185,12 +187,13 @@ class ModelBuilder(nn.Module):
                 self.assign_target(search_box, anchors_cwh, ctr_rpn, aspect_rpn, loc_rpn, gt_ctr_rpn)
 
         # rcnn
-        zf_rcnn = self.crop_align_feature(zf, template_box, (11, 11))
-        xf_rcnn = self.crop_align_feature(xf, anchors_rcnn, (11, 11))
+        zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
+        # zf_rcnn = self.crop_align_feature(zf, template_box, (11, 11))
+        xf_rcnn = self.crop_align_feature(xf, anchors_rcnn, (7, 7))
 
         # duplicate zf for cross correlation
         num_roi = xf_rcnn.shape[0] // zf_rcnn.shape[0]
-        assert num_roi == cfg.TRAIN.NUM_ROI
+        assert num_roi == cfg.TRAIN.RCNN.NUM_ROI
         zf_rcnn = torch.repeat_interleave(zf_rcnn, num_roi, dim=0)
 
         # [Nb*num_roi, 1, 1, 1]

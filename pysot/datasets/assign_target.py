@@ -15,10 +15,12 @@ from torchvision.ops import nms
 class AssignTarget(object):
     '''
     '''
-    def __init__(self, num_roi):
+    def __init__(self, num_roi, scale, aspect):
         '''
         '''
         self.num_roi = num_roi
+        self.scale = scale
+        self.aspect = aspect
 
     def __call__(self, targets, anchors_cwh, ctr_rpn, asp_rpn, loc_rpn, gt_ctr_rpn):
         '''
@@ -31,9 +33,20 @@ class AssignTarget(object):
             ax += (loc_rpn[:, 0:1, :, :] * aw)
             ay += (loc_rpn[:, 1:2, :, :] * ah)
 
-            asp = torch.sqrt(torch.exp(asp_rpn))
-            aw = aw.expand_as(asp_rpn) * asp
-            ah = ah.expand_as(asp_rpn) / asp
+            rand_asp_exp = torch.empty_like(asp_rpn)
+            rand_asp_exp.normal_(mean=0, std=0.333)
+            rand_scale_exp = torch.empty_like(asp_rpn)
+            rand_scale_exp.normal_(mean=0, std=0.333)
+
+            rand_asp = torch.ones_like(asp_rpn) * self.aspect
+            rand_scale = torch.ones_like(asp_rpn) * self.scale
+
+            rand_asp.pow_(rand_asp_exp)
+            rand_scale.pow_(rand_scale_exp)
+
+            asp = torch.sqrt(torch.exp(asp_rpn) * rand_asp)
+            aw = aw.expand_as(asp_rpn) * asp * rand_scale
+            ah = ah.expand_as(asp_rpn) / asp * rand_scale
 
             # [Nb, 4, 25, 25]
             anchor_all = torch.cat([ \
@@ -45,8 +58,8 @@ class AssignTarget(object):
             # per-batch nms
             Nb = anchor_all.shape[0]
 
-            ctrs = ctr_rpn.view(Nb, -1)
-            # ctrs = gt_ctr_rpn.view(Nb, -1) + torch.sigmoid(ctr_rpn.view(Nb, -1))
+            # ctrs = ctr_rpn.view(Nb, -1)
+            ctrs = gt_ctr_rpn.view(Nb, -1) + torch.sigmoid(ctr_rpn.view(Nb, -1))
             anchor_all = anchor_all.view(Nb, 4, -1).permute(0, 2, 1)
 
             ax = torch.reshape(ax, (Nb, -1,))
@@ -60,7 +73,7 @@ class AssignTarget(object):
             selected_loc = []
 
             for ii, (target, anchor, ctr) in enumerate(zip(targets, anchor_all, ctrs)):
-                keep = nms(anchor, ctr, 0.7)[:self.num_roi]
+                keep = nms(anchor, ctr, 0.7)[:(self.num_roi)]
                 nms_anchor = torch.index_select(anchor, 0, keep)
                 selected_anchor.append(nms_anchor)
 

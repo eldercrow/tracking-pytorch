@@ -129,6 +129,6 @@ class AnchorTarget:
         #                     delta[2][pn_2nd] / anchors_cwh_2nd[2], \
         #                     delta[3][pn_2nd] / anchors_cwh_2nd[3]], axis=0)
 
-        return ctr_rpn, aspect_rpn, loc_rpn, np.random.uniform(0.0, 1.0) * ctr #, \
+        return ctr_rpn, aspect_rpn, loc_rpn, np.random.uniform(0.0, 0.3) * ctr #, \
             #    np.transpose(anchors_2nd, (1, 0)), np.transpose(anchors_cwh_2nd, (1, 0)), \
             #    ctr_2nd, iou_2nd, np.transpose(loc_2nd, (1, 0))
