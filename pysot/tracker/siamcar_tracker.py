@@ -83,7 +83,8 @@ class SiamCARTracker(SiameseTracker):
         return score
 
     def _convert_centerness(self, ctr):
-        ctr = torch.sigmoid(ctr.view(-1)).data.cpu().numpy()
+        ctr = ctr.view(-1).data.cpu().numpy()
+        # ctr = torch.sigmoid(ctr.view(-1)).data.cpu().numpy()
         return ctr
 
     def _convert_aspect(self, aspect):
@@ -166,7 +167,7 @@ class SiamCARTracker(SiameseTracker):
 
         ctr = self._convert_centerness(outputs['ctr_rcnn'])
         cls = self._convert_score(outputs['cls_rcnn'])
-        score = cls * ctr
+        score = np.power(ctr*cls, 1.0 / 3.0)
 
         # should be in [cx, cy, w, h] format
         pred_bbox = self._convert_bbox(outputs['loc_rcnn'], outputs['roi_rcnn'])

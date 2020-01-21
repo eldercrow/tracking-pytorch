@@ -46,12 +46,12 @@ class DepthwiseRPN(RPN):
                 nn.BatchNorm2d(hiddens),
                 nn.ReLU(inplace=True)
                 )
-        self.asp = nn.Sequential(
-                nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
-                nn.BatchNorm2d(hiddens),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(hiddens, 1, kernel_size=1, bias=True)
-                )
+        # self.asp = nn.Sequential(
+        #         nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
+        #         nn.BatchNorm2d(hiddens),
+        #         nn.ReLU(inplace=True),
+        #         nn.Conv2d(hiddens, 1, kernel_size=1, bias=True)
+        #         )
         self.ctr = nn.Sequential(
                 nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
                 nn.BatchNorm2d(hiddens),
@@ -62,7 +62,7 @@ class DepthwiseRPN(RPN):
                 nn.Conv2d(hiddens, hiddens, kernel_size=1, bias=False),
                 nn.BatchNorm2d(hiddens),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(hiddens, 2, kernel_size=1, bias=True)
+                nn.Conv2d(hiddens, 4, kernel_size=1, bias=True)
                 )
 
     def forward(self, z_f, x_f):
@@ -76,6 +76,7 @@ class DepthwiseRPN(RPN):
         feature = self.head(feature)
 
         ctr = self.ctr(feature)
-        asp = self.asp(feature)
+        # asp = self.asp(feature)
         loc = self.loc(feature)
-        return ctr, asp, loc
+        # asp, scale, loc = torch.split(loc, (1, 1, 2), dim=1)
+        return ctr, loc

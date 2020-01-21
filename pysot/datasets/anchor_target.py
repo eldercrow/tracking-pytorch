@@ -29,10 +29,15 @@ class AnchorTarget:
 
         # -1 ignore 0 negative 1 positive
         # cls_rpn = -1 * np.ones((anchor_num, sz_anc, sz_anc), dtype=np.int64)
-        asp = (target_c[2] - target_c[0]) / (target_c[3] - target_c[1])
-        aspect_rpn = np.log(asp).astype(np.float32)
+        tw = (target_c[2] - target_c[0])
+        th = (target_c[3] - target_c[1])
+        asp = np.log(tw / th)
+        scale = np.log(tw / self.anchors_cwh[2] * th / self.anchors_cwh[3])
+        # aspect_rpn = np.log(asp).astype(np.float32)
         ctr_rpn = -1 * np.ones((sz_anc, sz_anc), dtype=np.float32)
-        loc_rpn = np.ones((2, sz_anc, sz_anc), dtype=np.float32)
+        loc_rpn = np.ones((4, sz_anc, sz_anc), dtype=np.float32)
+        loc_rpn[0] = asp
+        loc_rpn[1] = scale
 
         # for 2nd stage
         # rcnn_delta = np.zeros((4, cfg.RCNN.NUM_ROI), dtype=np.float32)
@@ -59,10 +64,10 @@ class AnchorTarget:
                           x1 - self.anchors_cwh[0], \
                           y1 - self.anchors_cwh[1]], axis=0)
 
-        loc_rpn[0] = (x1 + x0) * 0.5 - self.anchors_cwh[0]
-        loc_rpn[1] = (y1 + y0) * 0.5 - self.anchors_cwh[1]
-        loc_rpn[0] /= self.anchors_cwh[2]
-        loc_rpn[1] /= self.anchors_cwh[3]
+        loc_rpn[2] = (x1 + x0) * 0.5 - self.anchors_cwh[0]
+        loc_rpn[3] = (y1 + y0) * 0.5 - self.anchors_cwh[1]
+        loc_rpn[2] /= (self.anchors_cwh[2] / 2.0)
+        loc_rpn[3] /= (self.anchors_cwh[3] / 2.0)
 
         # [25, 25]
         pos_mask = np.all(delta > 0, axis=0)
@@ -113,7 +118,7 @@ class AnchorTarget:
             # ctr_2nd = np.zeros((num_roi,), dtype=np.float32)
             # iou_2nd = np.zeros((num_roi,), dtype=np.float32)
             # loc_2nd = np.zeros((4, num_roi), dtype=np.float32)
-            return ctr_rpn, aspect_rpn, loc_rpn, np.random.uniform(0.0, 1.0) * ctr #, \
+            return ctr_rpn, loc_rpn, np.random.uniform(0.0, 1.0) * ctr #, \
                 #    np.transpose(anchors_2nd, (1, 0)), np.transpose(anchors_cwh_2nd, (1, 0)), \
                 #    ctr_2nd, iou_2nd, np.transpose(loc_2nd, (1, 0))
 
@@ -129,6 +134,6 @@ class AnchorTarget:
         #                     delta[2][pn_2nd] / anchors_cwh_2nd[2], \
         #                     delta[3][pn_2nd] / anchors_cwh_2nd[3]], axis=0)
 
-        return ctr_rpn, aspect_rpn, loc_rpn, np.random.uniform(0.0, 0.3) * ctr #, \
+        return ctr_rpn, loc_rpn, np.random.uniform(0.0, 0.3) * ctr #, \
             #    np.transpose(anchors_2nd, (1, 0)), np.transpose(anchors_cwh_2nd, (1, 0)), \
             #    ctr_2nd, iou_2nd, np.transpose(loc_2nd, (1, 0))

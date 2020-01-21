@@ -22,21 +22,23 @@ class AssignTarget(object):
         self.scale = scale
         self.aspect = aspect
 
-    def __call__(self, targets, anchors_cwh, ctr_rpn, asp_rpn, loc_rpn, gt_ctr_rpn):
+    def __call__(self, targets, anchors_cwh, ctr_rpn, loc_rpn, gt_ctr_rpn):
         '''
         targets: roi, (Nb, 4)
         '''
         with torch.no_grad():
+            asp_rpn, scale_rpn, loc_rpn = torch.split(loc_rpn, (1, 1, 2), dim=1)
+
             # each will be [Nb, 1, 25, 25]
             ax, ay, aw, ah = torch.split(anchors_cwh, 1, dim=1)
 
-            ax += (loc_rpn[:, 0:1, :, :] * aw)
-            ay += (loc_rpn[:, 1:2, :, :] * ah)
+            ax += loc_rpn[:, 0:1, :, :] * aw / 2.0
+            ay += loc_rpn[:, 1:2, :, :] * ah / 2.0
 
             rand_asp_exp = torch.empty_like(asp_rpn)
-            rand_asp_exp.normal_(mean=0, std=0.333)
+            rand_asp_exp.normal_(mean=0, std=0.5)
             rand_scale_exp = torch.empty_like(asp_rpn)
-            rand_scale_exp.normal_(mean=0, std=0.333)
+            rand_scale_exp.normal_(mean=0, std=0.5)
 
             rand_asp = torch.ones_like(asp_rpn) * self.aspect
             rand_scale = torch.ones_like(asp_rpn) * self.scale
@@ -45,8 +47,9 @@ class AssignTarget(object):
             rand_scale.pow_(rand_scale_exp)
 
             asp = torch.sqrt(torch.exp(asp_rpn) * rand_asp)
-            aw = aw.expand_as(asp_rpn) * asp * rand_scale
-            ah = ah.expand_as(asp_rpn) / asp * rand_scale
+            scale = torch.sqrt(torch.exp(scale_rpn) * rand_scale)
+            aw = aw.expand_as(asp_rpn) * asp * scale
+            ah = ah.expand_as(asp_rpn) / asp * scale
 
             # [Nb, 4, 25, 25]
             anchor_all = torch.cat([ \

@@ -4,7 +4,7 @@ BACKBONE:
     TYPE: "mobilenetv2"
     KWARGS:
         pretrained: true
-    TRAIN_EPOCH: 0
+    TRAIN_EPOCH: 10
     LAYERS_LR: 0.1
 
 ADJUST:
@@ -58,7 +58,7 @@ TRACK:
 TRAIN:
     EPOCH: 20
     START_EPOCH: 0
-    BATCH_SIZE: 16
+    BATCH_SIZE: 24
     BASE_LR: 0.005
     CLS_WEIGHT: 1.0
     LOC_WEIGHT: 1.2
@@ -80,6 +80,10 @@ TRAIN:
             start_lr: 0.001
             end_lr: 0.005
             step: 1
+
+    RCNN:
+        SCALE: 2.0
+        ASPECT: 1.6667
 
 DATASET:
     NAMES: 
@@ -109,6 +113,6 @@ DATASET:
         NUM_USE: 200000
 
     SEARCH:
-        SCALE: 1.3333
-        ASPECT: 1.5
+        SCALE: 2.5
+        ASPECT: 2.0
         BLUR: 2.0

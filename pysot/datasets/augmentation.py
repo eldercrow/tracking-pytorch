@@ -129,10 +129,10 @@ class ShiftScaleAugmentor(ImageAugmentor):
 
         tx = rtx * self.shift_range * sz
         ty = rty * self.shift_range * sz
-        ss = 1.0 + rs * (self.scale_range - 1.0) #np.power(self.scale_range, rs)
+        ss = np.power(self.scale_range, rs)
         asp = np.power(self.aspect_exp, rasp)
-        sx = ss * np.sqrt(asp)
-        sy = ss / np.sqrt(asp)
+        sx = np.sqrt(ss * asp)
+        sy = np.sqrt(ss / asp)
         if no_aug < 0.25: # no scale, only translation
             sx, sy, ss = (1, 1, 1)
             # initial crop box: (cx-t2, cy-t2, cx+t2, cy+t2)

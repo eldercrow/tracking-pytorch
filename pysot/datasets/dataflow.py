@@ -131,7 +131,7 @@ class TrainingDataPreprocessor:
 
         # ctr_rpn, aspect_rpn, anchors_rcnn, anchors_cwh_rcnn, ctr_rcnn, iou_rcnn, loc_rcnn = \
         #         self.anchor_target(search_box, is_neg)
-        ctr_rpn, aspect_rpn, loc_rpn, ctr_rpn_all = self.anchor_target(search_box, is_neg)
+        ctr_rpn, loc_rpn, ctr_rpn_all = self.anchor_target(search_box, is_neg)
 
         ret = { \
                 'template': np.transpose(template_image, (2, 0, 1)).astype(np.float32),
@@ -140,7 +140,6 @@ class TrainingDataPreprocessor:
                 'search_box': search_box,
                 'ctr_rpn': ctr_rpn,
                 'ctr_rpn_all': ctr_rpn_all,
-                'aspect_rpn': aspect_rpn,
                 'loc_rpn': loc_rpn,
                 'anchors_cwh': self.anchor_target.anchors_cwh
                 # 'anchors_rcnn': anchors_rcnn,

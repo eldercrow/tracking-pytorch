@@ -68,17 +68,19 @@ class ModelBuilder(nn.Module):
 
         # rpn
         # asp_rpn: [Nb, 1, 25, 25]
-        ctr_rpn, asp_rpn, loc_rpn = self.rpn_head(self.zf_rpn, xf)
+        ctr_rpn, loc_rpn = self.rpn_head(self.zf_rpn, xf)
+        asp_rpn, scale_rpn, loc_rpn = torch.split(loc_rpn, (1, 1, 2), dim=1)
 
         # each will be [1, 1, 25, 25]
         ax, ay, aw, ah = torch.split(anchor_cwh, 1, dim=1)
 
-        ax += (loc_rpn[:, :1, :, :] * aw)
-        ay += (loc_rpn[:, 1:, :, :] * ah)
+        ax += (loc_rpn[:, :1, :, :] * aw / 2.0)
+        ay += (loc_rpn[:, 1:, :, :] * ah / 2.0)
 
         asp_rpn = torch.sqrt(torch.exp(asp_rpn))
-        aw = aw.expand_as(asp_rpn) * asp_rpn
-        ah = ah.expand_as(asp_rpn) / asp_rpn
+        scale_rpn = torch.sqrt(torch.exp(scale_rpn))
+        aw = aw.expand_as(asp_rpn) * asp_rpn * scale_rpn
+        ah = ah.expand_as(asp_rpn) / asp_rpn * scale_rpn
 
         # [Nb, 4, 25, 25]
         anchor = torch.cat([ \
@@ -93,8 +95,8 @@ class ModelBuilder(nn.Module):
 
         # nms
         anchor = anchor.view(4, -1).permute(1, 0).contiguous()
-        ctr_rpn = ctr_rpn.view(-1)
-        keep = nms(anchor, torch.sigmoid(ctr_rpn), 0.7)[:cfg.RCNN.NUM_ROI]
+        ctr_rpn = torch.sigmoid(ctr_rpn.view(-1))
+        keep = nms(anchor, ctr_rpn, 0.7)[:cfg.RCNN.NUM_ROI]
         anchor = torch.index_select(anchor, 0, keep)
 
         # roi align
@@ -103,7 +105,8 @@ class ModelBuilder(nn.Module):
         # xf_rcnn = self.rcnn_backbone(xf_rcnn)
 
         ctr_rcnn, cls_rcnn, loc_rcnn = self.rcnn_head(self.zf_rcnn, xf_rcnn)
-        ctr_rcnn = 0.5 * (ctr_rcnn.view(-1) + ctr_rpn[keep])
+        # ctr_rcnn = torch.sigmoid(ctr_rcnn.view(-1))
+        ctr_rcnn = ctr_rpn[keep] * torch.sigmoid(ctr_rcnn.view(-1))
 
         return {
                 'ctr_rpn': ctr_rpn,
@@ -160,10 +163,9 @@ class ModelBuilder(nn.Module):
 
         label_ctr_rpn = data['ctr_rpn'].cuda()
         gt_ctr_rpn = data['ctr_rpn_all'].cuda()
-        label_aspect_rpn = data['aspect_rpn'].cuda()
         label_loc_rpn = data['loc_rpn'].cuda()
         anchors_cwh = data['anchors_cwh'].cuda()
-        label_aspect_w_rpn = torch.clamp(label_ctr_rpn, 0, 1)
+        label_loc_w_rpn = torch.sqrt(torch.clamp(label_ctr_rpn, 0, 1))
 
         # anchors_rcnn = data['anchors_rcnn'].cuda()
         # anchors_cwh_rcnn = data['anchors_cwh_rcnn'].cuda()
@@ -181,10 +183,11 @@ class ModelBuilder(nn.Module):
         zf_rpn = self.crop_align_feature(zf, template_box, (7, 7)) # (Nb, ch, 7, 7)
 
         # rpn head
-        ctr_rpn, aspect_rpn, loc_rpn = self.rpn_head(zf_rpn, xf)
+        ctr_rpn, loc_rpn = self.rpn_head(zf_rpn, xf)
 
         label_ctr_rcnn, label_cls_rcnn, label_loc_rcnn, anchors_rcnn = \
-                self.assign_target(search_box, anchors_cwh, ctr_rpn, aspect_rpn, loc_rpn, gt_ctr_rpn)
+                self.assign_target(search_box, anchors_cwh, ctr_rpn, loc_rpn, gt_ctr_rpn)
+        label_loc_w_rcnn = torch.sqrt(label_ctr_rcnn)
 
         # rcnn
         zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
@@ -204,27 +207,22 @@ class ModelBuilder(nn.Module):
 
         # get loss
         ctr_rpn_loss = select_bce_loss(ctr_rpn, label_ctr_rpn)
-        aspect_rpn_loss = (aspect_rpn - label_aspect_rpn.view(-1, 1, 1, 1)).abs()
-        aspect_rpn_loss = torch.squeeze(aspect_rpn_loss) * label_aspect_w_rpn
-        aspect_rpn_loss = aspect_rpn_loss.sum() / (label_aspect_w_rpn.sum() + 1e-08)
-        loc_rpn_loss = weight_l1_loss(loc_rpn, label_loc_rpn, label_aspect_w_rpn)
+        loc_rpn_loss = weight_l1_loss(loc_rpn, label_loc_rpn, label_loc_w_rpn)
 
         ctr_rcnn_loss = F.binary_cross_entropy_with_logits(ctr_rcnn.view(-1), label_ctr_rcnn.view(-1))
         cls_rcnn_loss = select_cross_entropy_loss(cls_rcnn, label_cls_rcnn.view(-1))
         loc_rcnn_loss = (loc_rcnn.view(-1, 4) - label_loc_rcnn.view(-1, 4)).abs().sum(dim=1)
-        loc_rcnn_loss *= label_ctr_rcnn.view(-1)
-        loc_rcnn_loss = loc_rcnn_loss.sum() / (label_ctr_rcnn.sum() + 1e-08)
+        loc_rcnn_loss *= label_loc_w_rcnn.view(-1)
+        loc_rcnn_loss = loc_rcnn_loss.sum() / (label_loc_w_rcnn.sum() + 1e-08)
 
         outputs = {}
         outputs['total_loss'] = \
                 cfg.TRAIN.CTR_WEIGHT * ctr_rpn_loss + \
-                cfg.TRAIN.CTR_WEIGHT * aspect_rpn_loss + \
                 cfg.TRAIN.LOC_WEIGHT * loc_rpn_loss + \
                 cfg.TRAIN.CTR_WEIGHT * ctr_rcnn_loss + \
                 cfg.TRAIN.CTR_WEIGHT * cls_rcnn_loss + \
                 cfg.TRAIN.LOC_WEIGHT * loc_rcnn_loss
         outputs['ctr_rpn_loss'] = ctr_rpn_loss
-        outputs['asp_rpn_loss'] = aspect_rpn_loss
         outputs['loc_rpn_loss'] = loc_rpn_loss
         outputs['ctr_rcnn_loss'] = ctr_rcnn_loss
         outputs['cls_rcnn_loss'] = cls_rcnn_loss
