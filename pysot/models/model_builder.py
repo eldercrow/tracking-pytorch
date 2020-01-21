@@ -179,8 +179,9 @@ class ModelBuilder(nn.Module):
         # get feature
         zf = self.backbone(template)
         xf = self.backbone(search)
-        zff = self.backbone_f(template)
-        xff = self.backbone_f(search)
+        with torch.no_grad():
+            zff = self.backbone_f(template)
+            xff = self.backbone_f(search)
 
         # neck with concat
         zf = self.neck(zf)
