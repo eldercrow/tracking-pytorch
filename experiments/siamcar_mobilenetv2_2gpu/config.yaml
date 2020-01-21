@@ -4,7 +4,7 @@ BACKBONE:
     TYPE: "mobilenetv2"
     KWARGS:
         pretrained: true
-    TRAIN_EPOCH: 10
+    TRAIN_EPOCH: 0
     LAYERS_LR: 0.1
 
 ADJUST:
