@@ -29,6 +29,9 @@ class ModelBuilder(nn.Module):
         self.backbone = get_backbone(cfg.BACKBONE.TYPE,
                                      **cfg.BACKBONE.KWARGS)
 
+        self.backbone_f = get_backbone(cfg.BACKBONE.TYPE,
+                                       **cfg.BACKBONE.KWARGS)
+
         # build adjust layer
         self.neck = get_neck(cfg.ADJUST.TYPE,
                              **cfg.ADJUST.KWARGS)
@@ -176,6 +179,8 @@ class ModelBuilder(nn.Module):
         # get feature
         zf = self.backbone(template)
         xf = self.backbone(search)
+        zff = self.backbone_f(template)
+        xff = self.backbone_f(search)
 
         # neck with concat
         zf = self.neck(zf)
@@ -215,18 +220,30 @@ class ModelBuilder(nn.Module):
         loc_rcnn_loss *= label_loc_w_rcnn.view(-1)
         loc_rcnn_loss = loc_rcnn_loss.sum() / (label_loc_w_rcnn.sum() + 1e-08)
 
+        # BN preserving loss
+        stat_losses = []
+        for zi, zfi in zip(zf, zff):
+            stat_losses.append(torch.mean(zi, dim=(0, 2, 3)) - torch.mean(zfi, dim=(0, 2, 3)))
+            stat_losses.append(torch.std(zi, dim=(0, 2, 3)) - torch.std(zfi, dim=(0, 2, 3)))
+        for xi, xfi in zip(xf, xff):
+            stat_losses.append(torch.mean(xi, dim=(0, 2, 3)) - torch.mean(xfi, dim=(0, 2, 3)))
+            stat_losses.append(torch.std(xi, dim=(0, 2, 3)) - torch.std(xfi, dim=(0, 2, 3)))
+        stat_loss = sum([s*s for s in stat_losses])
+
         outputs = {}
         outputs['total_loss'] = \
                 cfg.TRAIN.CTR_WEIGHT * ctr_rpn_loss + \
                 cfg.TRAIN.LOC_WEIGHT * loc_rpn_loss + \
                 cfg.TRAIN.CTR_WEIGHT * ctr_rcnn_loss + \
                 cfg.TRAIN.CTR_WEIGHT * cls_rcnn_loss + \
-                cfg.TRAIN.LOC_WEIGHT * loc_rcnn_loss
+                cfg.TRAIN.LOC_WEIGHT * loc_rcnn_loss + \
+                cfg.TRAIN.STAT_WEIGHT * stat_loss
         outputs['ctr_rpn_loss'] = ctr_rpn_loss
         outputs['loc_rpn_loss'] = loc_rpn_loss
         outputs['ctr_rcnn_loss'] = ctr_rcnn_loss
         outputs['cls_rcnn_loss'] = cls_rcnn_loss
         outputs['loc_rcnn_loss'] = loc_rcnn_loss
+        outputs['stat_loss'] = stat_loss
         
         # done
         return outputs
