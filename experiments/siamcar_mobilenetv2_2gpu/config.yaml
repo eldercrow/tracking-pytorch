@@ -58,11 +58,12 @@ TRACK:
 TRAIN:
     EPOCH: 20
     START_EPOCH: 0
-    BATCH_SIZE: 24
+    BATCH_SIZE: 16
     BASE_LR: 0.005
     CLS_WEIGHT: 1.0
     LOC_WEIGHT: 1.2
     CTR_WEIGHT: 1.0
+    STAT_WEIGHT: 1000.0
     NUM_WORKERS: 3
     RESUME: ''
     PRETRAINED: ''
@@ -87,10 +88,10 @@ TRAIN:
 
 DATASET:
     NAMES: 
-    - 'GOT10K'
+    # - 'GOT10K'
     - 'LASOT'
-    - 'VID'
-    - 'COCO'
+    # - 'VID'
+    # - 'COCO'
     - 'OPENIMAGE'
     # - 'YOUTUBEBB'
     # - 'DET'
@@ -101,7 +102,7 @@ DATASET:
     GOT10K:
         NUM_USE: 100000
     LASOT:
-        NUM_USE: 200000
+        NUM_USE: 100000
     VID:
         NUM_USE: 100000
     COCO:
@@ -109,8 +110,8 @@ DATASET:
     DET:
         NUM_USE: 200000
     OPENIMAGE:
-        ANNO: '~/dataset/openimage/crop/train.json'
-        NUM_USE: 200000
+        ANNO: '~/dataset/openimage/crop/validation.json'
+        NUM_USE: 100000
 
     SEARCH:
         SCALE: 2.5

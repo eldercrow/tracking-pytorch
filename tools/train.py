@@ -95,6 +95,12 @@ def build_opt_lr(model, current_epoch=0):
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
 
+    for param in model.backbone_f.parameters():
+        param.requires_grad = False
+    # for m in model.backbone_f.modules():
+    #     if isinstance(m, nn.BatchNorm2d):
+    #         m.eval()
+
     trainable_params = []
     trainable_params += [{'params': filter(lambda x: x.requires_grad,
                                            model.backbone.parameters()),

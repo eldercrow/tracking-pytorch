@@ -129,10 +129,11 @@ def reduce_gradients(model, _type='sum'):
     types = ['sum', 'avg']
     assert _type in types, 'gradients method must be in "{}"'.format(types)
     log_once("gradients method is {}".format(_type))
+    # import ipdb
+    # ipdb.set_trace()
     if get_world_size() > 1:
-        for param in model.parameters():
+        for name, param in model.named_parameters():
             if param.requires_grad:
-                # print(param)
                 dist.all_reduce(param.grad.data)
                 if _type == 'avg':
                     param.grad.data /= get_world_size()

@@ -177,15 +177,15 @@ class ModelBuilder(nn.Module):
         # label_loc_rcnn = data['loc_rcnn'].cuda() # [Nb, 4, num_roi]
 
         # get feature
-        zf = self.backbone(template)
-        xf = self.backbone(search)
+        zfo = self.backbone(template)
+        xfo = self.backbone(search)
         with torch.no_grad():
             zff = self.backbone_f(template)
             xff = self.backbone_f(search)
 
         # neck with concat
-        zf = self.neck(zf)
-        xf = self.neck(xf)
+        zf = self.neck(zfo)
+        xf = self.neck(xfo)
         zf_rpn = self.crop_align_feature(zf, template_box, (7, 7)) # (Nb, ch, 7, 7)
 
         # rpn head
@@ -222,14 +222,18 @@ class ModelBuilder(nn.Module):
         loc_rcnn_loss = loc_rcnn_loss.sum() / (label_loc_w_rcnn.sum() + 1e-08)
 
         # BN preserving loss
-        stat_losses = []
-        for zi, zfi in zip(zf, zff):
-            stat_losses.append(torch.mean(zi, dim=(0, 2, 3)) - torch.mean(zfi, dim=(0, 2, 3)))
-            stat_losses.append(torch.std(zi, dim=(0, 2, 3)) - torch.std(zfi, dim=(0, 2, 3)))
-        for xi, xfi in zip(xf, xff):
-            stat_losses.append(torch.mean(xi, dim=(0, 2, 3)) - torch.mean(xfi, dim=(0, 2, 3)))
-            stat_losses.append(torch.std(xi, dim=(0, 2, 3)) - torch.std(xfi, dim=(0, 2, 3)))
-        stat_loss = sum([s*s for s in stat_losses])
+        stat_loss = []
+        for zi, zfi in zip(zfo, zff):
+            lm = torch.mean(zi, dim=(0, 2, 3)) - torch.mean(zfi, dim=(0, 2, 3))
+            ls = torch.std(zi, dim=(0, 2, 3)) - torch.std(zfi, dim=(0, 2, 3))
+            stat_loss.append(torch.sum(lm * lm))
+            stat_loss.append(torch.sum(ls * ls))
+        for xi, xfi in zip(xfo, xff):
+            lm = torch.mean(xi, dim=(0, 2, 3)) - torch.mean(xfi, dim=(0, 2, 3))
+            ls = torch.std(xi, dim=(0, 2, 3)) - torch.std(xfi, dim=(0, 2, 3))
+            stat_loss.append(torch.sum(lm * lm))
+            stat_loss.append(torch.sum(ls * ls))
+        stat_loss = torch.sum(torch.stack(stat_loss))
 
         outputs = {}
         outputs['total_loss'] = \
