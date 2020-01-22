@@ -130,6 +130,8 @@ class MobileNetV2(nn.Module):
         # make it nn.Sequential
         self.features = nn.ModuleList(features)
 
+        self.out_ids = [6, 13, 17]
+
         # # building classifier
         # self.classifier = nn.Sequential(
         #     nn.Dropout(0.2),
@@ -152,11 +154,11 @@ class MobileNetV2(nn.Module):
     def _forward_impl(self, x):
         # This exists since TorchScript doesn't support inheritance, so the superclass method
         # (this one) needs to have a name other than `forward` that can be accessed in a subclass
-        out_ids = [6, 13, 17]
+        # out_ids = [6, 13, 17]
         outputs = []
         for ii, layer in enumerate(self.features):
             x = layer(x)
-            if ii in out_ids:
+            if ii in self.out_ids:
                 outputs.append(x)
         # x = self.features(x)
         # x = x.mean([2, 3])

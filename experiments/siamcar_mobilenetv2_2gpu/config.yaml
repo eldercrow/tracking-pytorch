@@ -4,7 +4,7 @@ BACKBONE:
     TYPE: "mobilenetv2"
     KWARGS:
         pretrained: true
-    TRAIN_EPOCH: 0
+    TRAIN_EPOCH: 5
     LAYERS_LR: 0.1
 
 ADJUST:
@@ -63,7 +63,7 @@ TRAIN:
     CLS_WEIGHT: 1.0
     LOC_WEIGHT: 1.2
     CTR_WEIGHT: 1.0
-    STAT_WEIGHT: 1000.0
+    STAT_WEIGHT: 10.0
     NUM_WORKERS: 3
     RESUME: ''
     PRETRAINED: ''

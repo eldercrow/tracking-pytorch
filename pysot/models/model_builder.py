@@ -20,6 +20,8 @@ from pysot.models.non_local import get_nonlocal
 # from pysot.models.backbone import mobilenet_v2_rcnn
 from pysot.datasets.assign_target import AssignTarget
 
+from functools import partial
+
 
 class ModelBuilder(nn.Module):
     def __init__(self):
@@ -31,6 +33,19 @@ class ModelBuilder(nn.Module):
 
         self.backbone_f = get_backbone(cfg.BACKBONE.TYPE,
                                        **cfg.BACKBONE.KWARGS)
+
+        self.backbone_f_outs = []
+        def hook_f(module, input, output):
+            self.backbone_f_outs.append(output)
+
+        self.backbone_outs = []
+        def hook(module, input, output):
+            self.backbone_outs.append(output)
+
+        for oid in self.backbone_f.out_ids:
+            self.backbone_f.features[oid].conv[2].register_forward_hook(hook_f)
+        for oid in self.backbone.out_ids:
+            self.backbone.features[oid].conv[2].register_forward_hook(hook)
 
         # build adjust layer
         self.neck = get_neck(cfg.ADJUST.TYPE,
@@ -223,17 +238,14 @@ class ModelBuilder(nn.Module):
 
         # BN preserving loss
         stat_loss = []
-        for zi, zfi in zip(zfo, zff):
-            lm = torch.mean(zi, dim=(0, 2, 3)) - torch.mean(zfi, dim=(0, 2, 3))
-            ls = torch.std(zi, dim=(0, 2, 3)) - torch.std(zfi, dim=(0, 2, 3))
-            stat_loss.append(torch.sum(lm * lm))
-            stat_loss.append(torch.sum(ls * ls))
-        for xi, xfi in zip(xfo, xff):
-            lm = torch.mean(xi, dim=(0, 2, 3)) - torch.mean(xfi, dim=(0, 2, 3))
-            ls = torch.std(xi, dim=(0, 2, 3)) - torch.std(xfi, dim=(0, 2, 3))
+        for fi, ffi in zip(self.backbone_outs, self.backbone_f_outs):
+            lm = torch.mean(fi, dim=(0, 2, 3)) - torch.mean(ffi, dim=(0, 2, 3))
+            ls = torch.std(fi, dim=(0, 2, 3)) - torch.std(ffi, dim=(0, 2, 3))
             stat_loss.append(torch.sum(lm * lm))
             stat_loss.append(torch.sum(ls * ls))
         stat_loss = torch.sum(torch.stack(stat_loss))
+        self.backbone_outs.clear()
+        self.backbone_f_outs.clear()
 
         outputs = {}
         outputs['total_loss'] = \
