@@ -108,6 +108,9 @@ class AssignTarget(object):
                                       (torch.min(dy0, dy1) / (torch.max(dy0, dy1) + 1e-08)))
             selected_ctr = torch.reshape(selected_ctr, (-1,))
 
+            # offset
+            selected_loc -= 0.5
+
             selected_cls = -1 * torch.ones_like(selected_ctr, dtype=torch.int64)
             selected_cls[selected_ctr > 0.3] = 1
             selected_cls[selected_ctr <= 0] = 0

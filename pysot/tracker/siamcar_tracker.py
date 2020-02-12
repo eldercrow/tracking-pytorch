@@ -167,7 +167,7 @@ class SiamCARTracker(SiameseTracker):
 
         ctr = self._convert_centerness(outputs['ctr_rcnn'])
         cls = self._convert_score(outputs['cls_rcnn'])
-        score = np.power(ctr*cls, 1.0 / 3.0)
+        score = ctr #np.power(ctr*cls, 1.0 / 3.0)
 
         # should be in [cx, cy, w, h] format
         pred_bbox = self._convert_bbox(outputs['loc_rcnn'], outputs['roi_rcnn'])

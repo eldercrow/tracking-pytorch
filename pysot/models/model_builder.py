@@ -37,6 +37,16 @@ class ModelBuilder(nn.Module):
         self.rpn_head = get_rpn_head(cfg.RPN.TYPE,
                                      **cfg.RPN.KWARGS)
 
+        ich = cfg.RPN.KWARGS['in_channels']
+        och = cfg.RCNN.KWARGS['in_channels']
+        self.rcnn_preproc = nn.Sequential(
+                nn.Conv2d(ich, ich, 3, stride=2, bias=False, groups=ich),
+                nn.BatchNorm2d(ich),
+                nn.Conv2d(ich, och, 1, bias=False),
+                nn.BatchNorm2d(och),
+                nn.ReLU(inplace=True)
+                )
+
         # build rcnn head
         self.rcnn_head = get_rcnn_head(cfg.RCNN.TYPE,
                                        **cfg.RCNN.KWARGS)
@@ -53,8 +63,9 @@ class ModelBuilder(nn.Module):
         roi = torch.Tensor(roi_centered).cuda()
         self.zf_rpn = self.crop_align_feature(zf, roi, (7, 7))
 
-        # zf_rcnn = self.crop_align_feature(zf, roi, (11, 11))
-        zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
+        zf_rcnn = self.crop_align_feature(zf, roi, (15, 15))
+        zf_rcnn = self.rcnn_preproc(zf_rcnn)
+        # zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
         self.zf_rcnn = torch.repeat_interleave(zf_rcnn, cfg.RCNN.NUM_ROI, dim=0)
 
         # self.zf = zf
@@ -105,8 +116,8 @@ class ModelBuilder(nn.Module):
         # xf_rcnn = self.rcnn_backbone(xf_rcnn)
 
         ctr_rcnn, cls_rcnn, loc_rcnn = self.rcnn_head(self.zf_rcnn, xf_rcnn)
-        # ctr_rcnn = torch.sigmoid(ctr_rcnn.view(-1))
-        ctr_rcnn = ctr_rpn[keep] * torch.sigmoid(ctr_rcnn.view(-1))
+        ctr_rcnn = torch.sigmoid(ctr_rcnn.view(-1))
+        # ctr_rcnn = ctr_rpn[keep] #* torch.sigmoid(ctr_rcnn.view(-1))
 
         return {
                 'ctr_rpn': ctr_rpn,
@@ -190,9 +201,11 @@ class ModelBuilder(nn.Module):
         label_loc_w_rcnn = torch.sqrt(label_ctr_rcnn)
 
         # rcnn
-        zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
-        # zf_rcnn = self.crop_align_feature(zf, template_box, (11, 11))
-        xf_rcnn = self.crop_align_feature(xf, anchors_rcnn, (7, 7))
+        # zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
+        zf_rcnn = self.crop_align_feature(zf, template_box, (15, 15))
+        xf_rcnn = self.crop_align_feature(xf, anchors_rcnn, (15, 15))
+        zf_rcnn = self.rcnn_preproc(zf_rcnn)
+        xf_rcnn = self.rcnn_preproc(xf_rcnn)
 
         # duplicate zf for cross correlation
         num_roi = xf_rcnn.shape[0] // zf_rcnn.shape[0]
