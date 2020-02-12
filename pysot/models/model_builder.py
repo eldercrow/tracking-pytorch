@@ -79,7 +79,7 @@ class ModelBuilder(nn.Module):
 
         # rpn
         # asp_rpn: [Nb, 1, 25, 25]
-        ctr_rpn, loc_rpn = self.rpn_head(self.zf_rpn, xf)
+        ctr_rpn, loc_rpn, feat_xcorr = self.rpn_head(self.zf_rpn, xf)
         asp_rpn, scale_rpn, loc_rpn = torch.split(loc_rpn, (1, 1, 2), dim=1)
 
         # each will be [1, 1, 25, 25]
@@ -112,10 +112,11 @@ class ModelBuilder(nn.Module):
 
         # roi align
         # [num_roi, ch, 7, 7]
-        xf_rcnn = self.crop_align_feature(xf, anchor.view(1, -1, 4), (7, 7))
+        feat_rcnn = self.crop_align_feature(feat_xcorr, anchor.view(1, -1, 4) * 5.0 / 7.0, (5, 5))
+        # xf_rcnn = self.crop_align_feature(xf, anchor.view(1, -1, 4), (7, 7))
         # xf_rcnn = self.rcnn_backbone(xf_rcnn)
 
-        ctr_rcnn, cls_rcnn, loc_rcnn = self.rcnn_head(self.zf_rcnn, xf_rcnn)
+        ctr_rcnn, cls_rcnn, loc_rcnn = self.rcnn_head(feat_rcnn)
         ctr_rcnn = torch.sigmoid(ctr_rcnn.view(-1))
         # ctr_rcnn = ctr_rpn[keep] #* torch.sigmoid(ctr_rcnn.view(-1))
 
@@ -194,7 +195,7 @@ class ModelBuilder(nn.Module):
         zf_rpn = self.crop_align_feature(zf, template_box, (7, 7)) # (Nb, ch, 7, 7)
 
         # rpn head
-        ctr_rpn, loc_rpn = self.rpn_head(zf_rpn, xf)
+        ctr_rpn, loc_rpn, feat_xcorr = self.rpn_head(zf_rpn, xf)
 
         label_ctr_rcnn, label_cls_rcnn, label_loc_rcnn, anchors_rcnn = \
                 self.assign_target(search_box, anchors_cwh, ctr_rpn, loc_rpn, gt_ctr_rpn)
@@ -202,20 +203,9 @@ class ModelBuilder(nn.Module):
 
         # rcnn
         # zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
-        zf_rcnn = self.crop_align_feature(zf, template_box, (15, 15))
-        xf_rcnn = self.crop_align_feature(xf, anchors_rcnn, (15, 15))
-        zf_rcnn = self.rcnn_preproc(zf_rcnn)
-        xf_rcnn = self.rcnn_preproc(xf_rcnn)
+        feat_rcnn = self.crop_align_feature(feat_xcorr, anchors_rcnn * 5.0 / 7.0, (5, 5))
 
-        # duplicate zf for cross correlation
-        num_roi = xf_rcnn.shape[0] // zf_rcnn.shape[0]
-        assert num_roi == cfg.TRAIN.RCNN.NUM_ROI
-        zf_rcnn = torch.repeat_interleave(zf_rcnn, num_roi, dim=0)
-
-        # [Nb*num_roi, 1, 1, 1]
-        # [Nb*num_roi, 1, 1, 1]
-        # [Nb*num_roi, 4, 1, 1]
-        ctr_rcnn, cls_rcnn, loc_rcnn = self.rcnn_head(zf_rcnn, xf_rcnn)
+        ctr_rcnn, cls_rcnn, loc_rcnn = self.rcnn_head(feat_rcnn)
         cls_rcnn = F.log_softmax(cls_rcnn.view(-1, 2), dim=1)
 
         # get loss

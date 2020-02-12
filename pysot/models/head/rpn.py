@@ -79,4 +79,4 @@ class DepthwiseRPN(RPN):
         # asp = self.asp(feature)
         loc = self.loc(feature)
         # asp, scale, loc = torch.split(loc, (1, 1, 2), dim=1)
-        return ctr, loc
+        return ctr, loc, feature
