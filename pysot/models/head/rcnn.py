@@ -27,18 +27,18 @@ class DepthwiseRCNN(RCNN):
     def __init__(self, in_channels=256, channels=[256, 128, 128], hiddens=512):
         super(DepthwiseRCNN, self).__init__()
 
-        self.preproc = _dwconv3(ich, hiddens)
+        self.preproc = self._dwconv3(in_channels, hiddens)
         self.ctr = nn.Sequential(
-                _dwconv3(hiddens, channels[0]),
+                self._dwconv3(hiddens, channels[0]),
                 nn.Conv2d(channels[0], 1, kernel_size=1)
                 )
         self.cls = nn.Sequential(
-                _dwconv3(hiddens, channels[1]),
-                nn.Conv2d(channels[1], 1, kernel_size=1)
+                self._dwconv3(hiddens, channels[1]),
+                nn.Conv2d(channels[1], 2, kernel_size=1)
                 )
         self.loc = nn.Sequential(
-                _dwconv3(hiddens, channels[2]),
-                nn.Conv2d(channels[2], 1, kernel_size=1)
+                self._dwconv3(hiddens, channels[2]),
+                nn.Conv2d(channels[2], 4, kernel_size=1)
                 )
 
     def _dwconv3(self, ich, och):

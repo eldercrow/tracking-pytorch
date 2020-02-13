@@ -11,6 +11,7 @@ docker run --rm --runtime=nvidia -it \
   -v /home/hyunjoon/dataset:/home/$USERNAME/dataset \
   -v /home/hyunjoon/dataset_jinwook:/home/$USERNAME/dataset_jinwook \
   -v /home/hyunjoon/.local:/home/$USERNAME/.local \
+  -v /home/hyunjoon/.cache:/home/$USERNAME/.cache \
   --network host \
   pytorch-cuda101-cudnn7 \
   /bin/bash

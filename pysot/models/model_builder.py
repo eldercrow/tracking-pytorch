@@ -39,13 +39,13 @@ class ModelBuilder(nn.Module):
 
         ich = cfg.RPN.KWARGS['in_channels']
         och = cfg.RCNN.KWARGS['in_channels']
-        self.rcnn_preproc = nn.Sequential(
-                nn.Conv2d(ich, ich, 3, stride=2, bias=False, groups=ich),
-                nn.BatchNorm2d(ich),
-                nn.Conv2d(ich, och, 1, bias=False),
-                nn.BatchNorm2d(och),
-                nn.ReLU(inplace=True)
-                )
+        # self.rcnn_preproc = nn.Sequential(
+        #         nn.Conv2d(ich, ich, 3, stride=2, bias=False, groups=ich),
+        #         nn.BatchNorm2d(ich),
+        #         nn.Conv2d(ich, och, 1, bias=False),
+        #         nn.BatchNorm2d(och),
+        #         nn.ReLU(inplace=True)
+        #         )
 
         # build rcnn head
         self.rcnn_head = get_rcnn_head(cfg.RCNN.TYPE,
@@ -63,10 +63,10 @@ class ModelBuilder(nn.Module):
         roi = torch.Tensor(roi_centered).cuda()
         self.zf_rpn = self.crop_align_feature(zf, roi, (7, 7))
 
-        zf_rcnn = self.crop_align_feature(zf, roi, (15, 15))
-        zf_rcnn = self.rcnn_preproc(zf_rcnn)
-        # zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
-        self.zf_rcnn = torch.repeat_interleave(zf_rcnn, cfg.RCNN.NUM_ROI, dim=0)
+        # zf_rcnn = self.crop_align_feature(zf, roi, (15, 15))
+        # zf_rcnn = self.rcnn_preproc(zf_rcnn)
+        # # zf_rcnn = zf[:, :, 4:11, 4:11].contiguous()
+        # self.zf_rcnn = torch.repeat_interleave(zf_rcnn, cfg.RCNN.NUM_ROI, dim=0)
 
         # self.zf = zf
 
