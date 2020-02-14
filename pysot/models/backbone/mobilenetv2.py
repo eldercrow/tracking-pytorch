@@ -102,8 +102,8 @@ class MobileNetV2(nn.Module):
                 [6, 32, 3, 2, 1],
                 [6, 64, 4, 1, 2],
                 [6, 96, 3, 1, 2],
-                [6, 160, 3, 1, 3],
-                [6, 320, 1, 1, 3],
+                [6, 160, 3, 1, 4],
+                # [6, 320, 1, 1, 4],
             ]
 
         # only check the first element, assuming user knows t,c,n,s are required
@@ -150,7 +150,7 @@ class MobileNetV2(nn.Module):
     def _forward_impl(self, x):
         # This exists since TorchScript doesn't support inheritance, so the superclass method
         # (this one) needs to have a name other than `forward` that can be accessed in a subclass
-        out_ids = [6, 13, 17]
+        out_ids = [13, 16]
         outputs = []
         for ii, layer in enumerate(self.features):
             x = layer(x)
