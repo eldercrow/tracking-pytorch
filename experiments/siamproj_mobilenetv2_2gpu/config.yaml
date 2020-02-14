@@ -1,0 +1,118 @@
+META_ARC: "siamcar_mobilenetv2"
+
+BACKBONE:
+    TYPE: "mobilenetv2"
+    KWARGS:
+        pretrained: true
+    TRAIN_EPOCH: 10
+    LAYERS_LR: 0.1
+
+ADJUST:
+    ADJUST: true
+    TYPE: "AdjustAllLayer"
+    KWARGS:
+        in_channels: [32, 96, 320]
+        out_channels: [192, 576, 256]
+
+# NONLOCAL:
+#     TYPE: 'MultiNonLocal'
+#     KWARGS:
+#         in_channels: [256, 256, 256]
+#         out_channels: [256, 256, 256]
+#         key_channels: [64, 64, 64]
+#         value_channels: [128, 128, 128]
+#         in_hw: 31
+
+RPN:
+    TYPE: 'DepthwiseRPN'
+    KWARGS:
+        in_channels: 1024
+        hiddens: 256
+        num_anchor: 5
+        # weighted: true
+
+RCNN:
+    TYPE: 'DepthwiseRCNN'
+    NUM_ROI: 32
+    KWARGS:
+        in_channels: 256
+        hiddens: 512
+        channels: [256, 128, 128]
+
+ANCHOR:
+    STRIDE: 8
+    RATIOS: [1]
+    SCALES: [8]
+    ANCHOR_NUM: 5
+
+TRACK:
+    TYPE: 'SiamRCNNTracker'
+    PENALTY_K: 0.05
+    WINDOW_INFLUENCE: 0.42
+    LR: 0.38
+    EXEMPLAR_SIZE: 127
+    INSTANCE_SIZE: 255
+    BASE_SIZE: 8
+    CONTEXT_AMOUNT: 0.5
+
+TRAIN:
+    EPOCH: 20
+    START_EPOCH: 0
+    BATCH_SIZE: 16
+    BASE_LR: 0.005
+    CLS_WEIGHT: 1.0
+    LOC_WEIGHT: 1.2
+    CTR_WEIGHT: 1.0
+    NUM_WORKERS: 3
+    RESUME: ''
+    PRETRAINED: ''
+    PRINT_FREQ: 100
+
+    LR:
+        TYPE: 'log'
+        KWARGS:
+            start_lr: 0.005
+            end_lr: 0.0005
+    LR_WARMUP:
+        TYPE: 'step'
+        EPOCH: 5
+        KWARGS:
+            start_lr: 0.001
+            end_lr: 0.005
+            step: 1
+
+    RCNN:
+        SCALE: 2.0
+        ASPECT: 1.6667
+
+DATASET:
+    NAMES: 
+    - 'GOT10K'
+    # - 'LASOT'
+    # - 'VID'
+    - 'COCO'
+    # - 'OPENIMAGE'
+    # - 'YOUTUBEBB'
+    # - 'DET'
+
+    NEG: 0.2
+    GRAY: 0.0
+
+    GOT10K:
+        NUM_USE: 100000
+    LASOT:
+        NUM_USE: 200000
+    VID:
+        NUM_USE: 100000
+    COCO:
+        NUM_USE: 200000
+    DET:
+        NUM_USE: 200000
+    OPENIMAGE:
+        ANNO: '~/dataset/openimage/crop/train.json'
+        NUM_USE: 200000
+
+    SEARCH:
+        SCALE: 2.5
+        ASPECT: 2.0
+        BLUR: 2.0
