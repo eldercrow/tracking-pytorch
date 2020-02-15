@@ -9,9 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torchvision.ops import roi_align
-
-from pysot.models.head.xcorr import xcorr_fast, xcorr_depthwise #, L1DiffFunction
+from pysot.models.head.xcorr import xcorr_proj #, xcorr_depthwise
 from pysot.models.init_weight import init_weights
 from pysot.models.head.transformer import Transformer
 

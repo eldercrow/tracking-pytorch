@@ -9,41 +9,17 @@ BACKBONE:
 
 ADJUST:
     ADJUST: true
-    TYPE: "AdjustAllLayer"
+    TYPE: "AdjustLayer"
     KWARGS:
-        in_channels: [32, 96, 320]
-        out_channels: [192, 576, 256]
-
-# NONLOCAL:
-#     TYPE: 'MultiNonLocal'
-#     KWARGS:
-#         in_channels: [256, 256, 256]
-#         out_channels: [256, 256, 256]
-#         key_channels: [64, 64, 64]
-#         value_channels: [128, 128, 128]
-#         in_hw: 31
+        in_channels: 256
+        out_channels: 1024
 
 RPN:
     TYPE: 'DepthwiseRPN'
     KWARGS:
         in_channels: 1024
-        hiddens: 256
-        num_anchor: 5
+        hiddens: [512, 256]
         # weighted: true
-
-RCNN:
-    TYPE: 'DepthwiseRCNN'
-    NUM_ROI: 32
-    KWARGS:
-        in_channels: 256
-        hiddens: 512
-        channels: [256, 128, 128]
-
-ANCHOR:
-    STRIDE: 8
-    RATIOS: [1]
-    SCALES: [8]
-    ANCHOR_NUM: 5
 
 TRACK:
     TYPE: 'SiamRCNNTracker'

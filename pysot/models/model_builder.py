@@ -16,7 +16,6 @@ from pysot.models.loss import select_cross_entropy_loss, weight_l1_loss, select_
 from pysot.models.backbone import get_backbone
 from pysot.models.head import get_rpn_head
 from pysot.models.neck import get_neck
-from pysot.models.non_local import get_nonlocal
 
 
 class ModelBuilder(nn.Module):
@@ -30,9 +29,6 @@ class ModelBuilder(nn.Module):
         # build adjust layer
         self.neck = get_neck(cfg.ADJUST.TYPE,
                              **cfg.ADJUST.KWARGS)
-
-        # roi align for cropping center
-        # self.roi_align = RoIAlign((7, 7), 1.0 / cfg.ANCHOR.STRIDE, 1)
 
         # build rpn head
         self.rpn_head = get_rpn_head(cfg.RPN.TYPE,
@@ -69,16 +65,11 @@ class ModelBuilder(nn.Module):
         search = data['search'].cuda()
         # template_box = data['template_box'].cuda()
         # search_box = data['search_box'].cuda()
-        # 12: from template to search
-        label_cls12 = data['label_cls12'].cuda()
-        label_loc12 = data['label_loc12'].cuda()
-        label_loc_weight12 = data['label_loc_weight12'].cuda()
-        label_centerness12 = data['label_centerness12'].cuda()
-        # 21: from search to template
-        # label_cls21 = data['label_cls21'].cuda()
-        # label_loc21 = data['label_loc21'].cuda()
-        # label_loc_weight21 = data['label_loc_weight21'].cuda()
-        # label_centerness21 = data['label_centerness21'].cuda()
+        # : from template to search
+        label_cls = data['label_cls'].cuda()
+        label_loc = data['label_loc'].cuda()
+        label_loc_weight = data['label_loc_weight'].cuda()
+        label_centerness = data['label_centerness'].cuda()
 
         # get feature
         zf = self.backbone(template)
@@ -86,41 +77,17 @@ class ModelBuilder(nn.Module):
         # neck
         zf = self.neck(zf)
         xf = self.neck(xf)
-        # non-local
-        # zf = self.non_local(zf)
-        # xf = self.non_local(xf)
-
-        # crop
-        # first adjust coordinate
-        # hh, ww = zf[0].shape[2:4] if isinstance(zf, (list, tuple)) else zf.shape[2:4]
-        # assert hh == ww
-        # offset = (hh / 2.0 - 0.5) * cfg.ANCHORLESS.STRIDE
-        # template_box += offset
-        # search_box += offset
-        #
-        # template_box = torch.split(template_box, 1, dim=0)
-        # search_box = torch.split(search_box, 1, dim=0)
 
         # head
-        cls12, loc12, ctr12 = self.rpn_head(zf, xf)
+        cls, loc, ctr = self.rpn_head(zf, xf)
         # cls21, loc21, ctr21 = self.rpn_head(xf_crop, zf)
 
         # get loss
-        cls12 = self.log_softmax(cls12)
-        cls_loss = select_cross_entropy_loss(cls12, label_cls12, label_centerness12)
-        loc_loss = weight_l1_loss(loc12, label_loc12, label_loc_weight12)
-        # ctr12 = torch.sigmoid(ctr12)
-        ctr_loss = select_bce_loss(ctr12, label_centerness12)
-
-        # cls21 = self.log_softmax(cls21)
-        # cls_loss21 = select_cross_entropy_loss(cls21, label_cls21, label_centerness21)
-        # loc_loss21 = weight_l1_loss(loc21, label_loc21, label_loc_weight21)
-        # ctr21 = torch.sigmoid(ctr21)
-        # ctr_loss21 = select_bce_loss(ctr21, label_centerness12)
-
-        # cls_loss = 0.5 * (cls_loss12 + cls_loss21)
-        # loc_loss = 0.5 * (loc_loss12 + loc_loss21)
-        # ctr_loss = 0.5 * (ctr_loss12 + ctr_loss21)
+        cls = self.log_softmax(cls)
+        cls_loss = select_cross_entropy_loss(cls, label_cls, label_centerness)
+        loc_loss = weight_l1_loss(loc, label_loc, label_loc_weight)
+        # ctr = torch.sigmoid(ctr)
+        ctr_loss = select_bce_loss(ctr, label_centerness)
 
         outputs = {}
         outputs['total_loss'] = cfg.TRAIN.CLS_WEIGHT * cls_loss + \
