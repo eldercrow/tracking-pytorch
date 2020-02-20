@@ -26,6 +26,8 @@ class ModelBuilder(nn.Module):
         self.backbone = get_backbone(cfg.BACKBONE.TYPE,
                                      **cfg.BACKBONE.KWARGS)
 
+        self.grad_backbone = get_backbone('gradnet', **cfg.BACKBONE.GRAD.KWARGS)
+
         # build adjust layer
         self.neck = get_neck(cfg.ADJUST.TYPE,
                              **cfg.ADJUST.KWARGS)
@@ -74,9 +76,11 @@ class ModelBuilder(nn.Module):
         # get feature
         zf = self.backbone(template)
         xf = self.backbone(search)
+        zf_g = self.grad_backbone(template)
+        xf_g = self.grad_backbone(search)
         # neck
-        zf = self.neck(zf)
-        xf = self.neck(xf)
+        zf = self.neck(zf, zf_g)
+        xf = self.neck(xf, xf_g)
 
         # head
         cls, loc, ctr = self.rpn_head(zf, xf)

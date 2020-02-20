@@ -10,33 +10,36 @@ import torch.nn as nn
 
 
 class AdjustLayer(nn.Module):
-    def __init__(self, in_channels, hiddens, out_channels, center_size=7):
+    def __init__(self, in_channels, out_channels, center_size=7):
         super(AdjustLayer, self).__init__()
         self.downsample = nn.Sequential(
-                nn.Conv2d(in_channels, hiddens, kernel_size=1, bias=False),
-                nn.BatchNorm2d(hiddens),
-                nn.ReLU(inplace=True),
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
+                nn.BatchNorm2d(out_channels),
+                # nn.ReLU(inplace=True),
             )
         self.center_size = center_size
-        self.pool = nn.Sequential(
-                nn.Conv2d(hiddens, out_channels, kernel_size=1, bias=False),
-                nn.BatchNorm2d(out_channels),
-                nn.ReLU(inplace=True),
-                nn.MaxPool2d(kernel_size=center_size, stride=1)
-            )
+        # self.pool = nn.Sequential(
+        #         nn.Conv2d(hiddens, out_channels, kernel_size=1, bias=False),
+        #         nn.BatchNorm2d(out_channels),
+        #         nn.ReLU(inplace=True),
+        #         nn.MaxPool2d(kernel_size=center_size, stride=1)
+        #     )
 
-    def forward(self, x):
+    def forward(self, x, grad=None):
         if isinstance(x, (list, tuple)):
             x = torch.cat(x, dim=1)
 
         x = self.downsample(x)
+
+        if grad is not None:
+            x += grad
 
         if x.size(3) < 20:
             l = (x.size(3) - self.center_size) // 2
             r = l + self.center_size
             x = x[:, :, l:r, l:r]
 
-        x = self.pool(x)
+        # x = self.pool(x)
         return x
 
 

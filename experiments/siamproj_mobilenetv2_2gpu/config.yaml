@@ -1,28 +1,30 @@
-META_ARC: "siamcar_mobilenetv2"
+META_ARC: "siamproj_mobilenetv2"
 
 BACKBONE:
     TYPE: "mobilenetv2"
     KWARGS:
         pretrained: true
-    TRAIN_EPOCH: 10
+    TRAIN_EPOCH: 100
     LAYERS_LR: 0.1
+    GRAD:
+        KWARGS:
+            out_channels: 256
 
 ADJUST:
     ADJUST: true
     TYPE: "AdjustLayer"
     KWARGS:
         in_channels: 256
-        out_channels: 1024
+        out_channels: 256
 
 RPN:
     TYPE: 'DepthwiseRPN'
     KWARGS:
-        in_channels: 1024
-        hiddens: [512, 256]
-        # weighted: true
+        in_channels: 256
+        hiddens: 256
 
 TRACK:
-    TYPE: 'SiamRCNNTracker'
+    TYPE: 'SiamCARTracker'
     PENALTY_K: 0.05
     WINDOW_INFLUENCE: 0.42
     LR: 0.38
@@ -32,9 +34,9 @@ TRACK:
     CONTEXT_AMOUNT: 0.5
 
 TRAIN:
-    EPOCH: 20
+    EPOCH: 60
     START_EPOCH: 0
-    BATCH_SIZE: 16
+    BATCH_SIZE: 40
     BASE_LR: 0.005
     CLS_WEIGHT: 1.0
     LOC_WEIGHT: 1.2
@@ -47,27 +49,23 @@ TRAIN:
     LR:
         TYPE: 'log'
         KWARGS:
-            start_lr: 0.005
-            end_lr: 0.0005
+            start_lr: 0.01
+            end_lr: 0.0001
     LR_WARMUP:
         TYPE: 'step'
         EPOCH: 5
         KWARGS:
             start_lr: 0.001
-            end_lr: 0.005
+            end_lr: 0.01
             step: 1
-
-    RCNN:
-        SCALE: 2.0
-        ASPECT: 1.6667
 
 DATASET:
     NAMES: 
     - 'GOT10K'
-    # - 'LASOT'
+    - 'LASOT'
     # - 'VID'
     - 'COCO'
-    # - 'OPENIMAGE'
+    - 'OPENIMAGE'
     # - 'YOUTUBEBB'
     # - 'DET'
 
@@ -86,7 +84,7 @@ DATASET:
         NUM_USE: 200000
     OPENIMAGE:
         ANNO: '~/dataset/openimage/crop/train.json'
-        NUM_USE: 200000
+        NUM_USE: 100000
 
     SEARCH:
         SCALE: 2.5

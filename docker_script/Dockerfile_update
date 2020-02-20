@@ -5,14 +5,12 @@ FROM pytorch-cuda101-cudnn7:latest
 ENV http_proxy http://proxy-chain.intel.com:911
 ENV https_proxy http://proxy-chain.intel.com:911
 
-RUN apt-get update && apt-get -y upgrade
-RUN apt-get -y install git
+RUN apt-get update #&& apt-get -y upgrade
 # RUN rm -rf /var/lib/apt/lists/*
 
 # Add whatever you need here
 RUN pip3 --no-cache-dir install --upgrade pip
-RUN pip3 --no-cache-dir install --upgrade git+https://github.com/tensorpack/dataflow.git
+RUN pip3 --no-cache-dir install --upgrade tensorboard
 # RUN pip3 --no-cache-dir install tensorpack opencv-python pycocotools
 # COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 # RUN chmod +x /usr/local/bin/entrypoint.sh
-RUN apt-get -y purge git

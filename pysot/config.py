@@ -192,6 +192,9 @@ __C.BACKBONE.LAYERS_LR = 0.1
 # Switch to train layer
 __C.BACKBONE.TRAIN_EPOCH = 10
 
+__C.BACKBONE.GRAD = CN()
+__C.BACKBONE.GRAD.KWARGS = CN(new_allowed=True)
+
 # ------------------------------------------------------------------------ #
 # Adjust layer options
 # ------------------------------------------------------------------------ #
@@ -204,14 +207,6 @@ __C.ADJUST.KWARGS = CN(new_allowed=True)
 
 # Adjust layer type
 __C.ADJUST.TYPE = "AdjustAllLayer"
-
-# ------------------------------------------------------------------------ #
-# Non-local layer options
-# ------------------------------------------------------------------------ #
-__C.NONLOCAL = CN()
-
-__C.NONLOCAL.TYPE = 'MultiNonLocal'
-__C.NONLOCAL.KWARGS = CN(new_allowed=True)
 
 # ------------------------------------------------------------------------ #
 # RPN options
