@@ -66,7 +66,15 @@ def load_pretrain(model, pretrained_path):
             new_dict[k] = v
         pretrained_dict = new_dict
         check_keys(model, pretrained_dict)
-    model.load_state_dict(pretrained_dict, strict=False)
+
+    # import ipdb
+    # ipdb.set_trace()
+    # pretrained_dict['rpn_head.ctr_feat.0.weight'] = pretrained_dict.pop('rpn_head.ctr.0.weight')
+    # pretrained_dict['rpn_head.ctr_feat.1.weight'] = pretrained_dict.pop('rpn_head.ctr.1.weight')
+    # pretrained_dict['rpn_head.ctr_feat.1.bias'] = pretrained_dict.pop('rpn_head.ctr.1.bias')
+    # pretrained_dict['rpn_head.ctr.weight'] = pretrained_dict.pop('rpn_head.ctr.3.weight')
+    # pretrained_dict['rpn_head.ctr.bias'] = pretrained_dict.pop('rpn_head.ctr.3.bias')
+    model.load_state_dict(pretrained_dict, strict=True)
     return model
 
 

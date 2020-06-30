@@ -165,7 +165,7 @@ __C.DATASET.LASOT.NUM_USE = 200000
 
 __C.DATASET.OPENIMAGE = CN()
 __C.DATASET.OPENIMAGE.ROOT = '~/dataset/openimage/crop'
-__C.DATASET.OPENIMAGE.ANNO = '~/dataset/openimage/crop/train.json'
+__C.DATASET.OPENIMAGE.ANNO = '~/dataset/openimage/crop/validation.json'
 __C.DATASET.OPENIMAGE.FRAME_RANGE = 1
 __C.DATASET.OPENIMAGE.MIN_FRAME_RANGE = 0
 __C.DATASET.OPENIMAGE.NUM_USE = 200000

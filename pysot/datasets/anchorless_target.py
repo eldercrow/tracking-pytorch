@@ -28,7 +28,8 @@ class AnchorlessTarget:
         sz_anc = cfg.TRAIN.OUTPUT_SIZE
 
         # -1 ignore 0 negative 1 positive
-        cls = -1 * np.ones((sz_anc, sz_anc), dtype=np.int64)
+        cls = -1 * np.ones((sz_anc, sz_anc), dtype=np.float32)
+        # cls = -1 * np.ones((sz_anc, sz_anc), dtype=np.int64)
         delta = np.zeros((4, sz_anc, sz_anc), dtype=np.float32)
         delta_weight = np.zeros((sz_anc, sz_anc), dtype=np.float32)
         centerness = -1 * np.ones((sz_anc, sz_anc), dtype=np.float32)
