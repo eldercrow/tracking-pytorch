@@ -7,10 +7,12 @@ from __future__ import unicode_literals
 
 from pysot.models.head.rpn import DepthwiseRPN
 from pysot.models.head.car_head import CARHead
+from pysot.models.head.corr_head import CorrHead
 
 RPNS = {
         'DepthwiseRPN': DepthwiseRPN,
-        'CARHead': CARHead
+        'CARHead': CARHead,
+        'CorrHead': CorrHead
        }
 
 

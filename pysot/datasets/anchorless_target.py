@@ -81,7 +81,7 @@ class AnchorlessTarget:
         neg, neg_num = select(neg, cfg.TRAIN.TOTAL_NUM - cfg.TRAIN.POS_NUM)
 
         cls[pos] = 1
-        delta_weight[pos] = 1. / (pos_num + 1e-6)
+        delta_weight[pos] = 1. / (pos_num * 4 + 1e-6)
         # delta_weight[pos] = ctr[pos] / (np.sum(ctr[pos]) + 1e-08)
         centerness[pos] = ctr[pos]
 

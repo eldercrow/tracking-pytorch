@@ -48,6 +48,21 @@ def xcorr_depthwise(x, kernel):
     return out
 
 
+def xcorr_circular(x, kernel):
+    '''
+    '''
+    Nb, nch, hh, ww = x.shape
+    assert kernel.size(2) == 1 and kernel.size(3) == 1
+    kernel = kernel.expand_as(x)
+
+    x = torch.reshape(x.permute(0, 2, 3, 1), (1, Nb*hh*ww, 1, nch))
+    x = F.pad(x, (0, nch-1, 0, 0), mode='circular')
+    kernel = torch.reshape(kernel.permute(0, 2, 3, 1), (Nb*hh*ww, 1, 1, nch))
+
+    res = F.conv2d(x, kernel, groups=Nb*hh*ww)
+    res = torch.reshape(res, (Nb, hh, ww, nch)).permute(0, 3, 1, 2)
+    return res
+
 # # Inherit from Function
 # class L1DiffFunction(torch.autograd.Function):
 #

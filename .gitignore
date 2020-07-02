@@ -108,4 +108,4 @@ testing_dataset/*
 experiments
 
 pretrained_models/*
-result_images/*
+result_images

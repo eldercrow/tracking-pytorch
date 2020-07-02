@@ -97,8 +97,8 @@ class DepthwiseRPN(RPN):
         # cls = self.cls(feature)
         loc = self.loc(feature)
         w2, h2 = self.kw // 2, self.kh // 2
-        loc = loc[:, :, h2:-h2, w2:-w2]
-        # loc = self._ps_rearrange(loc, self.kh, self.kw)
+        # loc = loc[:, :, h2:-h2, w2:-w2]
+        loc = self._ps_rearrange(loc, self.kh, self.kw)
         ctr_feat = self.ctr_feat(feature)
         ctr = self.ctr(ctr_feat)
         ctr = self._ps_rearrange(ctr, self.kh, self.kw)
