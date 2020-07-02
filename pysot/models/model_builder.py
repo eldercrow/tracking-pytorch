@@ -57,6 +57,7 @@ class ModelBuilder(nn.Module):
                }
 
     def log_softmax(self, cls):
+        assert cls.size(1) == 2
         cls = cls.permute(0, 2, 3, 1).contiguous()
         cls = F.log_softmax(cls, dim=3)
         # b, a2, h, w = cls.size()
@@ -65,29 +66,16 @@ class ModelBuilder(nn.Module):
         # cls = F.log_softmax(cls, dim=4)
         return cls
 
-    def weighted_sum(self, x, w):
-        w = torch.reshape(w, (1, -1, 1, 1))
-        x = x * w.expand_as(x)
-        return torch.sum(x, dim=1, keepdim=True)
-
-    def weighted_sum_loc(self, x, w):
-        Nb, nch, hh, ww = x.shape
-        x = torch.reshape(x, (Nb, 4, nch//4, hh, ww))
-        w = torch.reshape(w, (1, 4, -1, 1, 1))
-        x = x * w.expand_as(x) # (Nb, 4*n_preds, h, w)
-        x = torch.sum(x, dim=2, keepdim=False)
-        return x
-
     def forward(self, data):
         """ only used in training
         """
         template = data['template'].cuda()
         search = data['search'].cuda()
         # 12: from template to search
-        label_cls12 = data['label_cls12'].cuda()
-        label_loc12 = data['label_loc12'].cuda()
-        label_loc_weight12 = data['label_loc_weight12'].cuda()
-        label_centerness12 = data['label_centerness12'].cuda()
+        label_cls = data['label_cls'].cuda()
+        label_loc = data['label_loc'].cuda()
+        label_loc_weight = data['label_loc_weight'].cuda()
+        label_ctr = data['label_ctr'].cuda()
 
         # get feature
         zf = self.backbone(template)
@@ -97,17 +85,14 @@ class ModelBuilder(nn.Module):
         xf = self.neck(xf)
 
         # head
-        cls12, loc12, ctr12, cls_weight, loc_weight, ctr_weight = self.rpn_head(zf, xf)
+        cls, loc, ctr = self.rpn_head(zf, xf)
+        cls = self.log_softmax(cls)
 
         # get loss
-        cls12 = self.weighted_sum(cls12, cls_weight) #self.log_softmax(cls12)
-        cls_loss = select_bce_loss(cls12, label_cls12)
-        # cls_loss = select_cross_entropy_loss(cls12, label_cls12, label_centerness12)
-        loc12 = self.weighted_sum_loc(loc12, loc_weight)
-        loc_loss = weight_l1_loss(loc12, label_loc12, label_loc_weight12)
+        cls_loss = select_cross_entropy_loss(cls, label_cls)
+        loc_loss = weight_l1_loss(loc, label_loc, label_loc_weight)
         # ctr12 = torch.sigmoid(ctr12)
-        ctr12 = self.weighted_sum(ctr12, ctr_weight)
-        ctr_loss = select_bce_loss(ctr12, label_centerness12)
+        ctr_loss = select_bce_loss(ctr, label_ctr)
 
         outputs = {}
         outputs['total_loss'] = cfg.TRAIN.CLS_WEIGHT * cls_loss + \

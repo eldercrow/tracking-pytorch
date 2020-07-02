@@ -206,14 +206,6 @@ __C.ADJUST.KWARGS = CN(new_allowed=True)
 __C.ADJUST.TYPE = "AdjustAllLayer"
 
 # ------------------------------------------------------------------------ #
-# Non-local layer options
-# ------------------------------------------------------------------------ #
-__C.NONLOCAL = CN()
-
-__C.NONLOCAL.TYPE = 'MultiNonLocal'
-__C.NONLOCAL.KWARGS = CN(new_allowed=True)
-
-# ------------------------------------------------------------------------ #
 # RPN options
 # ------------------------------------------------------------------------ #
 __C.RPN = CN()
@@ -222,24 +214,6 @@ __C.RPN = CN()
 __C.RPN.TYPE = 'MultiRPN'
 
 __C.RPN.KWARGS = CN(new_allowed=True)
-
-# ------------------------------------------------------------------------ #
-# Anchor options
-# ------------------------------------------------------------------------ #
-__C.ANCHOR = CN()
-
-# Anchor stride
-__C.ANCHOR.STRIDE = 8
-
-# Anchor ratios
-__C.ANCHOR.RATIOS = [0.333, 0.5, 1, 2, 3]
-
-# Anchor scales
-__C.ANCHOR.SCALES = [8]
-
-# Anchor number
-__C.ANCHOR.ANCHOR_NUM = len(__C.ANCHOR.RATIOS) * len(__C.ANCHOR.SCALES)
-
 
 # ------------------------------------------------------------------------ #
 # Anchorless options

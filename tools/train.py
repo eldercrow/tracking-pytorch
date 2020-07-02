@@ -38,6 +38,8 @@ logger = logging.getLogger('global')
 parser = argparse.ArgumentParser(description='siamrpn tracking')
 parser.add_argument('--cfg', type=str, default='config.yaml',
                     help='configuration of tracking')
+parser.add_argument('--num-workers', type=int, default=1,
+                    help='number of CPU workers per GPU')
 parser.add_argument('--seed', type=int, default=123456,
                     help='random seed')
 parser.add_argument('--local_rank', type=int, default=0,
@@ -266,6 +268,7 @@ def main():
 
     # load cfg
     cfg.merge_from_file(args.cfg)
+    cfg.TRAIN.NUM_WORKERS = args.num_workers
     if rank == 0:
         if not os.path.exists(cfg.TRAIN.LOG_DIR):
             os.makedirs(cfg.TRAIN.LOG_DIR)

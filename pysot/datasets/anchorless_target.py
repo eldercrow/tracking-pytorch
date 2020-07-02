@@ -28,8 +28,8 @@ class AnchorlessTarget:
         sz_anc = cfg.TRAIN.OUTPUT_SIZE
 
         # -1 ignore 0 negative 1 positive
-        cls = -1 * np.ones((sz_anc, sz_anc), dtype=np.float32)
-        # cls = -1 * np.ones((sz_anc, sz_anc), dtype=np.int64)
+        # cls = -1 * np.ones((sz_anc, sz_anc), dtype=np.float32)
+        cls = -1 * np.ones((sz_anc, sz_anc), dtype=np.int64)
         delta = np.zeros((4, sz_anc, sz_anc), dtype=np.float32)
         delta_weight = np.zeros((sz_anc, sz_anc), dtype=np.float32)
         centerness = -1 * np.ones((sz_anc, sz_anc), dtype=np.float32)
@@ -55,7 +55,8 @@ class AnchorlessTarget:
         delta[2] = x1 - self.centers[0]
         delta[3] = y1 - self.centers[1]
 
-        pos_mask = np.all(delta > 0, axis=0)
+        pos_mask = np.all(delta > cfg.ANCHORLESS.STRIDE, axis=0)
+        neg_mask = np.any(delta < -cfg.ANCHORLESS.STRIDE / 2, axis=0)
 
         delta = np.maximum(delta, 0)
 
@@ -74,13 +75,14 @@ class AnchorlessTarget:
         delta = delta / cfg.ANCHORLESS.SCALE - cfg.ANCHORLESS.OFFSET
 
         pos = np.where(pos_mask == True)
-        neg = np.where(pos_mask == False)
+        neg = np.where(neg_mask == True)
 
         pos, pos_num = select(pos, cfg.TRAIN.POS_NUM)
         neg, neg_num = select(neg, cfg.TRAIN.TOTAL_NUM - cfg.TRAIN.POS_NUM)
 
         cls[pos] = 1
-        delta_weight[pos] = ctr[pos] / (np.sum(ctr[pos]) + 1e-08) #1. / (pos_num + 1e-6)
+        delta_weight[pos] = 1. / (pos_num + 1e-6)
+        # delta_weight[pos] = ctr[pos] / (np.sum(ctr[pos]) + 1e-08)
         centerness[pos] = ctr[pos]
 
         cls[neg] = 0
