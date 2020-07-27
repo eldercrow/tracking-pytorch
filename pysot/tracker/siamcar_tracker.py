@@ -21,7 +21,7 @@ class SiamCARTracker(SiameseTracker):
         self.score_size = (cfg.TRACK.INSTANCE_SIZE - cfg.TRACK.EXEMPLAR_SIZE) // \
             cfg.ANCHORLESS.STRIDE + 1 + cfg.TRACK.BASE_SIZE
         # ps_rearrange specific
-        self.score_size -= 4
+        # self.score_size -= 4
         hanning = np.hanning(self.score_size)
         window = np.outer(hanning, hanning)
         self.window = window.flatten()
@@ -56,10 +56,10 @@ class SiamCARTracker(SiameseTracker):
         return np.stack([cx, cy, w, h], axis=0)
 
     def _convert_score(self, score):
-        score = score.permute(1, 2, 3, 0).contiguous().view(-1)
-        score = score.detach().cpu().numpy()
-        # score = score.permute(1, 2, 3, 0).contiguous().view(2, -1).permute(1, 0)
-        # score = F.softmax(score, dim=1).data[:, 1].cpu().numpy()
+        # score = score.permute(1, 2, 3, 0).contiguous().view(-1)
+        # score = score.detach().cpu().numpy()
+        score = score.permute(1, 2, 3, 0).contiguous().view(2, -1).permute(1, 0)
+        score = F.softmax(score, dim=1).data[:, 1].cpu().numpy()
         return score
 
     def _convert_cls_feat(self, feat):

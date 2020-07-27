@@ -46,10 +46,10 @@ class ModelBuilder(nn.Module):
     def track(self, x):
         xf = self.backbone(x)
         xf = self.neck(xf)
-        cls, loc, ctr, cls_weight, loc_weight, ctr_weight = self.rpn_head(self.zf, xf)
-        cls = self.weighted_sum(cls, cls_weight)
-        loc = self.weighted_sum_loc(loc, loc_weight)
-        ctr = self.weighted_sum(ctr, ctr_weight)
+        cls, loc, ctr = self.rpn_head(self.zf, xf)
+        # cls = self.weighted_sum(cls, cls_weight)
+        # loc = self.weighted_sum_loc(loc, loc_weight)
+        # ctr = self.weighted_sum(ctr, ctr_weight)
         return {
                 'cls': cls,
                 'loc': loc,
