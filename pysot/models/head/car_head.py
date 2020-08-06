@@ -67,12 +67,17 @@ class CARHead(torch.nn.Module):
 
         # initialization
         for modules in [self.cls_tower, self.bbox_tower,
-                        self.cls_logits, self.bbox_pred,
+                        self.cls_logits,
                         self.centerness]:
             for l in modules.modules():
                 if isinstance(l, nn.Conv2d):
                     torch.nn.init.normal_(l.weight, std=0.01)
                     torch.nn.init.constant_(l.bias, 0)
+
+        for l in self.bbox_pred.modules():
+            if isinstance(l, nn.Conv2d):
+                torch.nn.init.constant_(l.weight, 0)
+                torch.nn.init.constant_(l.bias, 0.5)
 
         # initialize the bias for focal loss
         # prior_prob = cfg.TRAIN.PRIOR_PROB
@@ -95,7 +100,8 @@ class CARHead(torch.nn.Module):
         cls_tower = self.cls_tower(x)
         logits = self.cls_logits(cls_tower)
         centerness = self.centerness(cls_tower)
-        bbox_reg = torch.exp(self.bbox_pred(self.bbox_tower(x)))
+        bbox_reg = self.bbox_pred(self.bbox_tower(x))
+        # bbox_reg = torch.exp(self.bbox_pred(self.bbox_tower(x)))
 
         return logits, bbox_reg, centerness
 

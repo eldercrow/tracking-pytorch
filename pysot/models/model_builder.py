@@ -12,7 +12,7 @@ import torch.nn.functional as F
 # from torchvision.ops import RoIAlign
 
 from pysot.config import cfg
-from pysot.models.loss import select_cross_entropy_loss, weight_l1_loss, select_bce_loss
+from pysot.models.loss import select_cross_entropy_loss, weight_l1_loss, select_bce_loss, weight_giou_loss
 from pysot.models.backbone import get_backbone
 from pysot.models.head import get_rpn_head
 from pysot.models.neck import get_neck
@@ -90,7 +90,8 @@ class ModelBuilder(nn.Module):
 
         # get loss
         cls_loss = select_cross_entropy_loss(cls, label_cls)
-        loc_loss = weight_l1_loss(loc, label_loc, label_loc_weight)
+        # loc_loss = weight_l1_loss(loc, label_loc, label_loc_weight)
+        loc_loss = weight_giou_loss(loc, label_loc, label_loc_weight)
         # ctr12 = torch.sigmoid(ctr12)
         ctr_loss = select_bce_loss(ctr, label_ctr)
 

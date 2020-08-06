@@ -43,6 +43,42 @@ def weight_l1_loss(pred_loc, label_loc, loss_weight):
     return loss.sum().div(b)
 
 
+def weight_giou_loss(pred_loc, label_loc, loss_weight):
+    Nb = pred_loc.shape[0]
+
+    x0g, y0g, x1g, y1g = torch.split(label_loc, 1, dim=1)
+    x0p, y0p, x1p, y1p = torch.split(pred_loc, 1, dim=1)
+
+    x0g *= -1
+    y0g *= -1
+    x0p *= -1
+    y0p *= -1
+
+    gt_area = (x1g - x0g) * (y1g - y0g)
+    pr_area = (x1p - x0p) * (y1p - y0p)
+
+    # iou
+    ix0 = torch.max(x0g, x0p)
+    iy0 = torch.max(y0g, y0p)
+    ix1 = torch.min(x1g, x1p)
+    iy1 = torch.min(y1g, y1p)
+    inter = torch.clamp(ix1 - ix0, min=0) * torch.clamp(iy1 - iy0, min=0)
+
+    union = gt_area + pr_area - inter
+    iou = inter / torch.clamp(union, min=1e-08)
+
+    # enclosure
+    ex0 = torch.min(x0g, x0p)
+    ey0 = torch.min(y0g, y0p)
+    ex1 = torch.max(x1g, x1p)
+    ey1 = torch.max(y1g, y1p)
+    enclosure = torch.clamp(ex1 - ex0, min=0) * torch.clamp(ey1 - ey0, min=0)
+
+    giou = iou - (enclosure - union) / torch.clamp(enclosure, min=1e-08)
+    loss = torch.squeeze(1. - giou) * loss_weight
+    return loss.sum().div(Nb)
+
+
 def select_cross_entropy_loss(pred, label, weight=None):
     pred = pred.view(-1, 2)
     label = label.view(-1)
